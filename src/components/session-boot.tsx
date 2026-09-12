@@ -7,6 +7,7 @@ import {
 import {
   kvClearScope,
   kvReadScope,
+  markKvScopeReady,
   setKvScope,
   wipeLegacyUnscoped,
 } from "@/lib/game/persist";
@@ -38,6 +39,7 @@ function adoptGuestIntoAccount() {
 function applyGuest() {
   wipeLegacyUnscoped();
   setKvScope("guest");
+  markKvScopeReady();
   notifyIntro();
 }
 
@@ -78,6 +80,7 @@ export function SessionBoot({ children }: { children: ReactNode }) {
 
     const guest = adoptGuestIntoAccount();
     setKvScope(`u:${userId}`);
+    markKvScopeReady();
     if (guest.name) writeTraineeName(guest.name);
     if (guest.intro) completeIntro(guest.name || readTraineeName());
     else notifyIntro();
@@ -91,6 +94,7 @@ export function SessionBoot({ children }: { children: ReactNode }) {
       if (!cancelled) notifyIntro();
     }, 4000);
 
+    const sessionsWhenFetchBegan = useGameStore.getState().sessions.length;
     void import("@/lib/game/profile")
       .then(({ loadProfile }) => loadProfile())
       .then((row) => {
@@ -104,7 +108,13 @@ export function SessionBoot({ children }: { children: ReactNode }) {
         if (name) writeTraineeName(name);
         if (row?.onboarded || guest.intro) completeIntro(name);
         if (row?.save && row.save.sessions.length > 0) {
+          // Local may have grown while the profile request was in flight.
           hydrateRemote(row.save);
+          const after = useGameStore.getState().sessions.length;
+          if (after < sessionsWhenFetchBegan) {
+            // Should be impossible after merge — re-persist current store.
+            useGameStore.getState().persist();
+          }
         }
         void import("@/lib/game/sync-social").then(({ pushLeaderboardScoresOnce }) =>
           pushLeaderboardScoresOnce(),

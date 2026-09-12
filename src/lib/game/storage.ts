@@ -130,11 +130,16 @@ export function parseImported(raw: string): SaveState {
  */
 export function mergeSaves(local: SaveState, remote: SaveState): SaveState {
   const byId = new Map<string, Session>();
+  const fingerprint = (sess: Session) =>
+    sess.id ||
+    `${Number(sess.at) || 0}:${Number(sess.duration) || 0}:${Number(sess.score) || 0}:${sess.mode}:${(sess.ops ?? []).join("")}`;
   for (const sess of remote.sessions ?? []) {
-    if (sess?.id) byId.set(sess.id, sess);
+    if (!sess) continue;
+    byId.set(fingerprint(sess), sess);
   }
   for (const sess of local.sessions ?? []) {
-    if (sess?.id) byId.set(sess.id, sess); // local wins on same id
+    if (!sess) continue;
+    byId.set(fingerprint(sess), sess); // local wins on same key
   }
   const sessions = [...byId.values()]
     .sort((a, b) => (Number(a.at) || 0) - (Number(b.at) || 0))

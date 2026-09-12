@@ -14,9 +14,19 @@ const APP_KEYS = [
 ] as const;
 
 let scope = GUEST;
+let scopeReady = false;
 
 function namespaced(key: string): string {
   return `${scope}|${key}`;
+}
+
+/** AppShell must not hydrate guest defaults before SessionBoot sets u:/guest. */
+export function markKvScopeReady(): void {
+  scopeReady = true;
+}
+
+export function isKvScopeReady(): boolean {
+  return scopeReady;
 }
 
 function storeGet(store: Storage, key: string): string | null {

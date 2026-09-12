@@ -49,8 +49,10 @@ export const loadProfile = createServerFn({ method: "GET" })
     if (!row) return null;
     let save: SaveState | null = null;
     try {
-      if (row.save_json && row.save_json !== "{}") {
-        save = parseImported(row.save_json);
+      const raw = row.save_json as unknown;
+      if (raw && raw !== "{}") {
+        if (typeof raw === "string") save = parseImported(raw);
+        else if (typeof raw === "object") save = parseImported(JSON.stringify(raw));
       }
     } catch {
       save = null;

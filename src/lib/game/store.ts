@@ -28,6 +28,7 @@ import {
   isBoardStandardSettings,
   OPS,
 } from "./types";
+import { isKvScopeReady } from "./persist";
 
 export type Phase = "idle" | "playing" | "paused" | "results";
 
@@ -88,6 +89,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   hydrate: (force?: boolean) => {
     if (get().hydrated && !force) return;
+    // Avoid writing guest empties over the real account save before boot.
+    if (!force && !isKvScopeReady()) return;
     const loaded = loadSave();
     set({
       ...loaded,
@@ -106,7 +109,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   hydrateRemote: (save) => {
     if (get().phase === "playing" || get().phase === "paused") return;
-    const merged = mergeSaves(persistable(get()), save);
+    const local = persistable(get());
+    const merged = mergeSaves(local, save);
+    // Hard floor: never shrink below what we already have in memory.
+    if (merged.sessions.length < local.sessions.length) {
+      merged.sessions = local.sessions.slice(-80);
+    }
     set({
       ...merged,
       hydrated: true,
@@ -237,6 +245,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
       problem: null,
     });
     get().persist();
+    // Flush cloud save immediately so a refresh doesn't reload a stale profile.
+    void import("@/lib/game/profile")
+      .then(({ saveProfile }) =>
+        saveProfile({
+          data: {
+            saveJson: get().exportJson(),
+            onboarded: true,
+          },
+        }),
+      )
+      .catch(() => {});
     // Server streak / best_120 — guests and auth errors are ignored.
     void import("./leaderboard")
       .then(async ({ recordQualifiedRound }) => {
