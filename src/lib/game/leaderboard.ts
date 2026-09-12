@@ -536,17 +536,22 @@ export const recordQualifiedRound = createServerFn({ method: "POST" })
     const tz = pickTimeZone(row.timezone, data.timeZone);
     row = await syncRescueFlags(context.userId, row, sql, tz);
 
+    // Streak: finished rounds ≥120s. Leaderboard best_120 / weekly: exact 120s only.
     if (duration < 120) {
       return { ok: true as const, credited: false as const };
     }
+    const countsForLeaderboard = duration === 120;
 
     const now = new Date();
     const today = calendarDay(tz, now);
     const yday = yesterday(tz, now);
     const bestBefore = Number(row.best_120) || 0;
-    const best120 = Math.max(bestBefore, score);
+    const best120 = countsForLeaderboard
+      ? Math.max(bestBefore, score)
+      : bestBefore;
 
     // Weekly board: fair PT week for all users; reset when week_key rolls.
+    // Only exact 120s scores may raise best_120_week (180s etc. must not inflate it).
     const currentWeekKey = weekKeyPT(now);
     let bestWeek = Number(row.best_120_week) || 0;
     let weekKey = row.week_key;
@@ -554,7 +559,9 @@ export const recordQualifiedRound = createServerFn({ method: "POST" })
       bestWeek = 0;
       weekKey = currentWeekKey;
     }
-    bestWeek = Math.max(bestWeek, score);
+    if (countsForLeaderboard) {
+      bestWeek = Math.max(bestWeek, score);
+    }
 
     const last = asDay(row.streak_last_day, tz);
     let streakCount = Number(row.streak_count) || 0;
