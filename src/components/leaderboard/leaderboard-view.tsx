@@ -105,7 +105,7 @@ export function LeaderboardView() {
                   }
                 />
                 <Stat
-                  label="Best 120s"
+                  label="Best default 120s"
                   value={social.best120 > 0 ? String(social.best120) : "—"}
                 />
                 <Stat

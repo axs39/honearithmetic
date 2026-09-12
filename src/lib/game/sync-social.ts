@@ -1,5 +1,6 @@
 import { useGameStore } from "./store";
 import { isInCurrentWeekPT } from "./pt-day";
+import { isBoardEligibleSession } from "./types";
 
 /** Browser IANA timezone, or Pacific fallback. */
 export function clientTimeZone(): string {
@@ -15,14 +16,13 @@ export function clientTimeZone(): string {
 /** Local best completed 120s score from store map + sessions. */
 export function localBest120(): number {
   const s = useGameStore.getState();
-  const fromMap = Number(s.bestByDuration?.["120"]) || 0;
   let fromSessions = 0;
   for (const sess of s.sessions ?? []) {
-    if (sess.duration === 120 && sess.completed) {
+    if (isBoardEligibleSession(sess)) {
       fromSessions = Math.max(fromSessions, Number(sess.score) || 0);
     }
   }
-  return Math.max(0, Math.floor(fromMap), Math.floor(fromSessions));
+  return Math.max(0, Math.floor(fromSessions));
 }
 
 /** Best completed 120s from local sessions in the current PT week only. */
@@ -31,8 +31,7 @@ export function localBest120Week(): number {
   let best = 0;
   for (const sess of s.sessions ?? []) {
     if (
-      sess.duration === 120 &&
-      sess.completed &&
+      isBoardEligibleSession(sess) &&
       isInCurrentWeekPT(Number(sess.at) || 0)
     ) {
       best = Math.max(best, Number(sess.score) || 0);

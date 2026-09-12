@@ -9,7 +9,9 @@ import { formatDurationLabel, formatMs } from "@/lib/game/format";
 import { modeLabel, useGameStore } from "@/lib/game/store";
 import { readTraineeName } from "@/lib/game/trainee";
 import {
+  BOARD_STANDARD,
   DURATIONS,
+  isBoardStandardSettings,
   OP_SYMBOL,
   OPS,
   type DrillMode,
@@ -24,7 +26,7 @@ const MODES: { id: DrillMode; name: string; blurb: string }[] = [
   {
     id: "classic",
     name: "Classic",
-    blurb: "Uniform mix — the interview default.",
+    blurb: "Uniform mix — default round (leaderboard).",
   },
   {
     id: "adaptive",
@@ -57,6 +59,7 @@ export function HubView() {
 
   const last = sessions[sessions.length - 1];
   const best = bestByDuration[String(settings.duration)];
+  const boardEligible = isBoardStandardSettings(settings);
   const rec = useMemo(
     () => recommend(facts, sessions.length),
     [facts, sessions.length],
@@ -206,6 +209,34 @@ export function HubView() {
             </label>
           </div>
 
+          <div
+            className={
+              boardEligible
+                ? "mt-5 rounded-md bg-surface-2 px-3 py-2 text-xs leading-snug text-fg shadow-[var(--shadow-border)]"
+                : "mt-5 rounded-md bg-bg/40 px-3 py-2 text-xs leading-snug text-muted shadow-[var(--shadow-border)]"
+            }
+          >
+            {boardEligible ? (
+              <>Leaderboard round — Classic 120s, all ops, desk mix. This run counts.</>
+            ) : (
+              <>
+                Custom mods — practice only, does not rank.{" "}
+                <button
+                  type="button"
+                  className="underline underline-offset-2 hover:text-fg"
+                  onClick={() =>
+                    patchSettings({
+                      ...BOARD_STANDARD,
+                      sound: settings.sound,
+                    })
+                  }
+                >
+                  Reset to default round
+                </button>
+              </>
+            )}
+          </div>
+
           <p className="mt-5 text-xs font-medium text-muted">Mode</p>
           <div className="mt-2 grid gap-2 sm:grid-cols-3">
             {MODES.map((m) => (
@@ -273,6 +304,10 @@ export function HubView() {
       </section>
 
       <section className="lg:col-span-2">
+        <p className="mb-2 text-xs text-muted">
+          Number ranges below are also mods — desk mix is required for the
+          leaderboard.
+        </p>
         <NumbersSettings settings={settings} onPatch={patchSettings} />
       </section>
     </div>

@@ -21,7 +21,12 @@ import type {
   SessionEvent,
   SessionOpStat,
 } from "./types";
-import { DEFAULT_SETTINGS, enabledOps, OPS } from "./types";
+import {
+  DEFAULT_SETTINGS,
+  enabledOps,
+  isBoardStandardSettings,
+  OPS,
+} from "./types";
 
 export type Phase = "idle" | "playing" | "paused" | "results";
 
@@ -234,12 +239,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
     void import("./leaderboard")
       .then(async ({ recordQualifiedRound }) => {
         const { clientTimeZone } = await import("./sync-social");
+        const board = isBoardStandardSettings(s.settings);
         return recordQualifiedRound({
           data: {
             score: session.score,
             duration: session.duration,
             completed: session.completed,
             timeZone: clientTimeZone(),
+            mode: session.mode,
+            ops: session.ops,
+            boardStandard: board,
+            addLeft: s.settings.addLeft,
+            addRight: s.settings.addRight,
+            mulLeft: s.settings.mulLeft,
+            mulRight: s.settings.mulRight,
           },
         });
       })

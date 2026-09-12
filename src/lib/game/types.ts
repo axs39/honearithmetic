@@ -98,6 +98,20 @@ export const OP_LABEL: Record<Op, string> = {
 
 export const DURATIONS = [30, 60, 120, 180, 300, 600] as const;
 
+/** Official leaderboard round: Classic 120s, all ops, desk ranges. */
+export const BOARD_STANDARD = {
+  duration: 120,
+  mode: "classic" as const,
+  add: true,
+  sub: true,
+  mul: true,
+  div: true,
+  addLeft: { min: 2, max: 100 },
+  addRight: { min: 2, max: 100 },
+  mulLeft: { min: 2, max: 12 },
+  mulRight: { min: 2, max: 100 },
+} as const;
+
 export const DEFAULT_SETTINGS: GameSettings = {
   add: true,
   sub: true,
@@ -108,9 +122,63 @@ export const DEFAULT_SETTINGS: GameSettings = {
   mulLeft: { min: 2, max: 12 },
   mulRight: { min: 2, max: 100 },
   duration: 120,
-  mode: "adaptive",
+  mode: "classic",
   sound: true,
 };
+
+function rangeEq(
+  a: { min: number; max: number },
+  b: { min: number; max: number },
+): boolean {
+  return a.min === b.min && a.max === b.max;
+}
+
+/** True only for the official default round (mods / custom ops do not count). */
+export function isBoardStandardSettings(
+  s: Pick<
+    GameSettings,
+    | "duration"
+    | "mode"
+    | "add"
+    | "sub"
+    | "mul"
+    | "div"
+    | "addLeft"
+    | "addRight"
+    | "mulLeft"
+    | "mulRight"
+  >,
+): boolean {
+  return (
+    s.duration === BOARD_STANDARD.duration &&
+    s.mode === BOARD_STANDARD.mode &&
+    s.add === true &&
+    s.sub === true &&
+    s.mul === true &&
+    s.div === true &&
+    rangeEq(s.addLeft, BOARD_STANDARD.addLeft) &&
+    rangeEq(s.addRight, BOARD_STANDARD.addRight) &&
+    rangeEq(s.mulLeft, BOARD_STANDARD.mulLeft) &&
+    rangeEq(s.mulRight, BOARD_STANDARD.mulRight)
+  );
+}
+
+export function isBoardEligibleSession(session: {
+  completed: boolean;
+  duration: number;
+  mode: DrillMode;
+  ops: Op[];
+  /** Optional; when absent, ops+mode+duration only (legacy). */
+  boardStandard?: boolean;
+}): boolean {
+  if (!session.completed) return false;
+  if (session.boardStandard === true) return true;
+  if (session.boardStandard === false) return false;
+  // Legacy sessions: require classic 120s with all four ops recorded.
+  if (session.duration !== 120 || session.mode !== "classic") return false;
+  const set = new Set(session.ops);
+  return OPS.every((op) => set.has(op)) && session.ops.length === 4;
+}
 
 export const RANGE_PRESETS = [
   {

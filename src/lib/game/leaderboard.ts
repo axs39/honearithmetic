@@ -10,6 +10,7 @@ import {
   weekKeyPT,
   yesterday,
 } from "./pt-day";
+import { isBoardStandardSettings, type DrillMode, type Op } from "./types";
 
 const DISPLAY_CHANGE_MS = 90 * 24 * 60 * 60 * 1000; // ~3 months
 const PLACEHOLDER = "player";
@@ -513,6 +514,13 @@ export const recordQualifiedRound = createServerFn({ method: "POST" })
       duration: number;
       completed: boolean;
       timeZone?: string;
+      mode?: DrillMode;
+      ops?: Op[];
+      boardStandard?: boolean;
+      addLeft?: { min: number; max: number };
+      addRight?: { min: number; max: number };
+      mulLeft?: { min: number; max: number };
+      mulRight?: { min: number; max: number };
     }) => data,
   )
   .handler(async ({ context, data }) => {
@@ -536,11 +544,31 @@ export const recordQualifiedRound = createServerFn({ method: "POST" })
     const tz = pickTimeZone(row.timezone, data.timeZone);
     row = await syncRescueFlags(context.userId, row, sql, tz);
 
-    // Streak: finished rounds ≥120s. Leaderboard best_120 / weekly: exact 120s only.
+    // Streak: finished rounds ≥120s.
+    // Leaderboard: only the official default round (Classic 120s, all ops, desk ranges).
     if (duration < 120) {
       return { ok: true as const, credited: false as const };
     }
-    const countsForLeaderboard = duration === 120;
+    const rangesPresent =
+      data.addLeft &&
+      data.addRight &&
+      data.mulLeft &&
+      data.mulRight &&
+      data.mode != null;
+    const countsForLeaderboard = rangesPresent
+      ? isBoardStandardSettings({
+          duration,
+          mode: data.mode!,
+          add: Boolean(data.ops?.includes("add")),
+          sub: Boolean(data.ops?.includes("sub")),
+          mul: Boolean(data.ops?.includes("mul")),
+          div: Boolean(data.ops?.includes("div")),
+          addLeft: data.addLeft!,
+          addRight: data.addRight!,
+          mulLeft: data.mulLeft!,
+          mulRight: data.mulRight!,
+        })
+      : false;
 
     const now = new Date();
     const today = calendarDay(tz, now);
