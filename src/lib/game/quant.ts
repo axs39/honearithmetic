@@ -1,4 +1,5 @@
 import type { Session } from "./types";
+import { isBoardEligibleSession } from "./types";
 
 /** 120-second default clock — the desk benchmark. */
 export const BENCH_SECONDS = 120;
@@ -74,6 +75,34 @@ export function bestEquivalent120(
   if (completed.length === 0) return { score: 0, source: null };
   const best = Math.max(...completed.map(equivalent120));
   return { score: best, source: "equivalent" };
+}
+
+/**
+ * Top score for Compare / desk yardstick: official board rounds first
+ * (Classic 120s, all ops, desk ranges), else any completed 120s best.
+ */
+export function bestCompare120(
+  sessions: Session[],
+  bestByDuration: Record<string, number>,
+): { score: number; source: "120s" | null } {
+  let boardBest = 0;
+  for (const s of sessions) {
+    if (isBoardEligibleSession(s)) {
+      boardBest = Math.max(boardBest, Number(s.score) || 0);
+    }
+  }
+  if (boardBest > 0) return { score: boardBest, source: "120s" };
+
+  let any120 = 0;
+  for (const s of sessions) {
+    if (s.completed && s.duration === 120) {
+      any120 = Math.max(any120, Number(s.score) || 0);
+    }
+  }
+  const map = Number(bestByDuration[String(BENCH_SECONDS)]) || 0;
+  const best = Math.max(any120, map);
+  if (best > 0) return { score: best, source: "120s" };
+  return { score: 0, source: null };
 }
 
 export function traderDelta(score: number): number {

@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 import {
   AVG_CANDIDATE_SCORE,
@@ -7,22 +8,71 @@ import {
   QUANT_BANDS,
   SCALE_MAX,
   bandFor,
-  bestEquivalent120,
+  bestCompare120,
   traderDelta,
 } from "@/lib/game/quant";
 import { formatDurationLabel, formatPpm } from "@/lib/game/format";
 import { useGameStore } from "@/lib/game/store";
 import { cn } from "@/lib/utils";
 
+/** Fast early, ease near the end. Total duration under 2.5s. */
+const COUNT_MS = 2200;
+
+function easeOutExpo(t: number): number {
+  if (t >= 1) return 1;
+  if (t <= 0) return 0;
+  return 1 - Math.pow(2, -10 * t);
+}
+
+function useCountUp(target: number, enabled: boolean): number {
+  const [value, setValue] = useState(0);
+
+  useEffect(() => {
+    if (!enabled || target <= 0) {
+      setValue(0);
+      return;
+    }
+
+    const reduce =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) {
+      setValue(Math.round(target));
+      return;
+    }
+
+    setValue(0);
+    let raf = 0;
+    const start = performance.now();
+
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / COUNT_MS);
+      const eased = easeOutExpo(t);
+      setValue(Math.round(target * eased));
+      if (t < 1) raf = requestAnimationFrame(tick);
+      else setValue(Math.round(target));
+    };
+
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, enabled]);
+
+  return value;
+}
+
 export function CompareView() {
   const hydrated = useGameStore((s) => s.hydrated);
   const sessions = useGameStore((s) => s.sessions);
   const bestByDuration = useGameStore((s) => s.bestByDuration);
 
-  const { score, source } = bestEquivalent120(sessions, bestByDuration);
+  const { score, source } = bestCompare120(sessions, bestByDuration);
+  const shown = useCountUp(score, hydrated && source != null && score > 0);
   const band = bandFor(score);
   const delta = traderDelta(score);
-  const youPct = Math.max(2, Math.min(98, (score / SCALE_MAX) * 100));
+  const youPct = Math.max(
+    2,
+    Math.min(98, ((shown || 0) / SCALE_MAX) * 100),
+  );
   const traderPct = (AVG_TRADER_SCORE / SCALE_MAX) * 100;
   const elitePct = (ELITE_SCORE / SCALE_MAX) * 100;
   const candidatePct = (AVG_CANDIDATE_SCORE / SCALE_MAX) * 100;
@@ -54,12 +104,10 @@ export function CompareView() {
               <div className="mt-4 flex items-end justify-between gap-4">
                 <div>
                   <p className="font-display text-5xl tabular-nums tracking-tight text-fg">
-                    {Math.round(score)}
+                    {shown}
                   </p>
                   <p className="mt-1 text-sm text-muted">
-                    {source === "120s"
-                      ? `${formatDurationLabel(BENCH_SECONDS)} best`
-                      : `pace × 2 — equivalent to ${formatDurationLabel(BENCH_SECONDS)}`}
+                    {formatDurationLabel(BENCH_SECONDS)} best
                   </p>
                 </div>
                 <p className="max-w-[14rem] text-right text-sm text-muted">
@@ -80,7 +128,7 @@ export function CompareView() {
                 <Marker left={traderPct} label="Trader" strong />
                 <Marker left={elitePct} label="Elite" />
                 <span
-                  className="absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-fg shadow-[var(--shadow-border-hover)]"
+                  className="absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-fg shadow-[var(--shadow-border-hover)] transition-[left] duration-75 linear"
                   style={{ left: `${youPct}%` }}
                   title="You"
                 />
@@ -177,10 +225,7 @@ function Marker({
       style={{ left: `${left}%` }}
     >
       <span
-        className={cn(
-          "block h-3 w-px",
-          strong ? "bg-fg" : "bg-muted",
-        )}
+        className={cn("block h-3 w-px", strong ? "bg-fg" : "bg-muted")}
       />
       <span className="absolute top-4 left-1/2 -translate-x-1/2 whitespace-nowrap text-xs tracking-wide text-subtle uppercase">
         {label}
