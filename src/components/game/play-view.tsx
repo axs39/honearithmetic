@@ -214,7 +214,7 @@ export function PlayView() {
   }
 
   return (
-    <div className="relative flex min-h-dvh flex-col bg-bg text-fg">
+    <div className="page-motion page-motion--play relative flex min-h-dvh flex-col bg-bg text-fg">
       <div
         className="timer-bar absolute top-0 left-0 h-[3px] w-full bg-accent"
         style={{
@@ -223,7 +223,7 @@ export function PlayView() {
         }}
       />
 
-      <header className="flex items-center justify-between px-5 pt-6 sm:px-8">
+      <header data-play-chrome="header" className="flex items-center justify-between px-5 pt-6 sm:px-8">
         <button
           type="button"
           onClick={pause}
@@ -247,7 +247,7 @@ export function PlayView() {
         </button>
       </header>
 
-      <div className="mt-4 flex items-end justify-between px-5 sm:px-8">
+      <div data-play-chrome="score" className="mt-4 flex items-end justify-between px-5 sm:px-8">
         <div>
           <p className="text-[11px] tracking-wide text-muted uppercase">Time</p>
           <p

@@ -41,7 +41,7 @@ function Login() {
         <span className="font-display text-lg italic tracking-tight">Hone</span>
         <span className="w-16" />
       </header>
-      <div className="flex flex-1 flex-col pb-10">
+      <div className="page-motion page-motion--focus flex flex-1 flex-col pb-10">
         <Account />
       </div>
     </main>

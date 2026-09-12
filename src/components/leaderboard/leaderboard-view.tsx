@@ -170,7 +170,7 @@ export function LeaderboardView() {
               ) : rows == null ? (
                 <p className="mt-3 text-sm text-muted">Loading…</p>
               ) : (
-                <ul className="mt-3 divide-y divide-border">
+                <ul className="board-rows mt-3 divide-y divide-border">
                   {Array.from({ length: 10 }, (_, i) => {
                     const row = rows[i];
                     if (!row) {

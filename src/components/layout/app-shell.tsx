@@ -8,6 +8,15 @@ import { useGameStore } from "@/lib/game/store";
 
 type AppPath = "/" | "/progress" | "/compare" | "/leaderboard" | "/settings";
 
+function pageMotionClass(pathname: string): string {
+  if (pathname.startsWith("/progress")) return "page-motion page-motion--rise";
+  if (pathname.startsWith("/leaderboard")) return "page-motion page-motion--cascade";
+  if (pathname.startsWith("/compare")) return "page-motion page-motion--split";
+  if (pathname.startsWith("/settings")) return "page-motion page-motion--soft";
+  // Drill hub — same roll-out family as Hello Arnav
+  return "page-motion page-motion--reveal";
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const hydrate = useGameStore((s) => s.hydrate);
@@ -72,7 +81,15 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </div>
       </header>
-      <div className="px-5 pb-24 sm:px-8 sm:pb-16">{children}</div>
+      <div
+        key={pathname}
+        className={cn(
+          "px-5 pb-24 sm:px-8 sm:pb-16",
+          pageMotionClass(pathname),
+        )}
+      >
+        {children}
+      </div>
       <nav className="fixed inset-x-0 bottom-0 z-20 flex border-t border-border bg-bg/95 px-1 pt-1 pb-[max(0.35rem,env(safe-area-inset-bottom))] sm:hidden">
         <TabLink to="/" active={pathname === "/"} icon={<Timer className="size-5" />}>
           Drill
