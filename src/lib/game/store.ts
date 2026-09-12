@@ -227,6 +227,18 @@ export const useGameStore = create<GameStore>((set, get) => ({
       problem: null,
     });
     get().persist();
+    // Server streak / best_120 — guests and auth errors are ignored.
+    void import("./leaderboard")
+      .then(({ recordQualifiedRound }) =>
+        recordQualifiedRound({
+          data: {
+            score: session.score,
+            duration: session.duration,
+            completed: session.completed,
+          },
+        }),
+      )
+      .catch(() => {});
   },
 
   pause: () => {

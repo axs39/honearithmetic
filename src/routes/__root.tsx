@@ -10,6 +10,7 @@ import { OnboardingGate } from "@/components/onboarding/onboarding";
 import { SessionBoot } from "@/components/session-boot";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import { SaveBootstrap } from "@/components/save-bootstrap";
+import { DisplayNameGate } from "@/components/social/display-name-gate";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import appCss from "../styles.css?url";
 
@@ -88,6 +89,7 @@ function RootComponent() {
             <SessionBoot>
               <OnboardingGate>
                 <SaveBootstrap />
+                <DisplayNameGate />
                 <Outlet />
               </OnboardingGate>
             </SessionBoot>

@@ -68,6 +68,7 @@ export const saveProfile = createServerFn({ method: "POST" })
     (data: {
       saveJson: string;
       username?: string;
+      displayName?: string;
       onboarded?: boolean;
       requireUsername?: boolean;
     }) => data,
@@ -76,8 +77,8 @@ export const saveProfile = createServerFn({ method: "POST" })
     const sql = await getSql();
     const wanted = displayUsername(data.username);
     const onboarded = data.onboarded ?? true;
-    const existing = await sql<{ username: string }>`
-      select username from profiles where user_id = ${context.userId}
+    const existing = await sql<{ username: string; display_name: string | null }>`
+      select username, display_name from profiles where user_id = ${context.userId}
     `;
     const taken =
       wanted.toLowerCase() !== PLACEHOLDER
@@ -97,23 +98,64 @@ export const saveProfile = createServerFn({ method: "POST" })
       ? (existing[0]?.username ?? PLACEHOLDER)
       : wanted;
 
-    await sql`
-      insert into profiles (user_id, username, onboarded, save_json, updated_at)
-      values (
-        ${context.userId},
-        ${username},
-        ${onboarded},
-        ${data.saveJson},
-        now()
-      )
-      on conflict (user_id) do update set
-        save_json = excluded.save_json,
-        onboarded = excluded.onboarded,
-        username = case
-          when excluded.username = ${PLACEHOLDER} then profiles.username
-          else excluded.username
-        end,
-        updated_at = now()
-    `;
+    const pendingDisplay = (data.displayName ?? "").replace(/\s+/g, " ").trim().slice(0, 32);
+    let displayName: string | null = null;
+    if (pendingDisplay && !existing[0]?.display_name) {
+      const dnTaken = await sql<{ user_id: string }>`
+        select user_id from profiles
+        where lower(display_name) = ${pendingDisplay.toLowerCase()}
+          and user_id <> ${context.userId}
+        limit 1
+      `;
+      if (!dnTaken[0]) displayName = pendingDisplay;
+    }
+
+    if (displayName) {
+      await sql`
+        insert into profiles (user_id, username, onboarded, save_json, display_name, display_name_changed_at, updated_at)
+        values (
+          ${context.userId},
+          ${username},
+          ${onboarded},
+          ${data.saveJson},
+          ${displayName},
+          now(),
+          now()
+        )
+        on conflict (user_id) do update set
+          save_json = excluded.save_json,
+          onboarded = excluded.onboarded,
+          username = case
+            when excluded.username = ${PLACEHOLDER} then profiles.username
+            else excluded.username
+          end,
+          display_name = coalesce(profiles.display_name, excluded.display_name),
+          display_name_changed_at = case
+            when profiles.display_name is null and excluded.display_name is not null
+              then now()
+            else profiles.display_name_changed_at
+          end,
+          updated_at = now()
+      `;
+    } else {
+      await sql`
+        insert into profiles (user_id, username, onboarded, save_json, updated_at)
+        values (
+          ${context.userId},
+          ${username},
+          ${onboarded},
+          ${data.saveJson},
+          now()
+        )
+        on conflict (user_id) do update set
+          save_json = excluded.save_json,
+          onboarded = excluded.onboarded,
+          username = case
+            when excluded.username = ${PLACEHOLDER} then profiles.username
+            else excluded.username
+          end,
+          updated_at = now()
+      `;
+    }
     return { ok: true as const, reason: null };
   });

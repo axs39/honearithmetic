@@ -1,10 +1,12 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { BarChart3, Scale, Timer } from "lucide-react";
+import { BarChart3, Scale, Settings, Timer, Trophy } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
 import { SignedOut, UserButton } from "@/lib/auth/gates";
 import { SignupHint } from "@/components/auth/signup-hint";
 import { cn } from "@/lib/utils";
 import { useGameStore } from "@/lib/game/store";
+
+type AppPath = "/" | "/progress" | "/compare" | "/leaderboard" | "/settings";
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -47,6 +49,12 @@ export function AppShell({ children }: { children: ReactNode }) {
             <NavLink to="/compare" active={pathname === "/compare"}>
               Compare
             </NavLink>
+            <NavLink to="/leaderboard" active={pathname === "/leaderboard"}>
+              Leaderboard
+            </NavLink>
+            <NavLink to="/settings" active={pathname === "/settings"}>
+              Settings
+            </NavLink>
           </nav>
           <div className="[&_span]:text-muted [&_button]:text-muted [&_button]:hover:text-fg">
             <UserButton />
@@ -65,7 +73,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </header>
       <div className="px-5 pb-24 sm:px-8 sm:pb-16">{children}</div>
-      <nav className="fixed inset-x-0 bottom-0 z-20 flex border-t border-border bg-bg/95 px-2 pt-1 pb-[max(0.35rem,env(safe-area-inset-bottom))] sm:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-20 flex border-t border-border bg-bg/95 px-1 pt-1 pb-[max(0.35rem,env(safe-area-inset-bottom))] sm:hidden">
         <TabLink to="/" active={pathname === "/"} icon={<Timer className="size-5" />}>
           Drill
         </TabLink>
@@ -83,6 +91,20 @@ export function AppShell({ children }: { children: ReactNode }) {
         >
           Compare
         </TabLink>
+        <TabLink
+          to="/leaderboard"
+          active={pathname === "/leaderboard"}
+          icon={<Trophy className="size-5" />}
+        >
+          Board
+        </TabLink>
+        <TabLink
+          to="/settings"
+          active={pathname === "/settings"}
+          icon={<Settings className="size-5" />}
+        >
+          Settings
+        </TabLink>
       </nav>
     </div>
   );
@@ -93,7 +115,7 @@ function NavLink({
   active,
   children,
 }: {
-  to: "/" | "/progress" | "/compare";
+  to: AppPath;
   active: boolean;
   children: ReactNode;
 }) {
@@ -116,7 +138,7 @@ function TabLink({
   icon,
   children,
 }: {
-  to: "/" | "/progress" | "/compare";
+  to: AppPath;
   active: boolean;
   icon: ReactNode;
   children: ReactNode;
@@ -125,7 +147,7 @@ function TabLink({
     <Link
       to={to}
       className={cn(
-        "flex h-12 flex-1 flex-col items-center justify-center gap-0.5 rounded-sm text-xs",
+        "flex h-12 flex-1 flex-col items-center justify-center gap-0.5 rounded-sm text-[10px]",
         active ? "text-fg" : "text-muted",
       )}
     >

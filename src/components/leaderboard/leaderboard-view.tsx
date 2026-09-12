@@ -1,0 +1,190 @@
+import { Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { AppShell } from "@/components/layout/app-shell";
+import { Button } from "@/components/ui/button";
+import { useCurrentUserState } from "@/lib/auth/use-current-user";
+import {
+  getLeaderboard,
+  getSocialStatus,
+  type LeaderboardRow,
+  type SocialStatus,
+} from "@/lib/game/leaderboard";
+
+export function LeaderboardView() {
+  const { user, isPending } = useCurrentUserState();
+  const signedIn = Boolean(user && !user.isDevFallback);
+  const [rows, setRows] = useState<LeaderboardRow[] | null>(null);
+  const [social, setSocial] = useState<SocialStatus | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isPending) return;
+    if (!signedIn) {
+      setRows(null);
+      setSocial(null);
+      return;
+    }
+    let cancelled = false;
+    void Promise.all([getLeaderboard(), getSocialStatus()])
+      .then(([board, status]) => {
+        if (cancelled) return;
+        setRows(board.rows);
+        setSocial(status);
+        setError(null);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setError("Could not load the leaderboard.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [signedIn, isPending]);
+
+  return (
+    <AppShell>
+      <div className="mx-auto max-w-2xl pt-2">
+        <h1 className="font-display text-3xl tracking-tight sm:text-4xl">
+          Leaderboard
+        </h1>
+        <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted">
+          Ranked by best completed 120-second score. Streaks count Pacific Time
+          calendar days — finish a full 2-minute round to keep the fire lit.
+        </p>
+
+        {isPending ? (
+          <p className="mt-8 text-sm text-muted">Loading…</p>
+        ) : !signedIn ? (
+          <section className="mt-8 rounded-xl bg-surface p-6 shadow-[var(--shadow-border)]">
+            <p className="text-sm leading-relaxed text-muted">
+              Sign in to access leaderboard + streak
+            </p>
+            <Button asChild className="mt-4" size="lg">
+              <Link to="/login">Sign in</Link>
+            </Button>
+          </section>
+        ) : (
+          <>
+            {social?.hideFromLeaderboard ? (
+              <p className="mt-4 rounded-lg bg-surface-2 px-3 py-2 text-sm text-muted">
+                You’re hidden from the leaderboard. Others still appear below —
+                change this in Settings → Privacy.
+              </p>
+            ) : null}
+
+            {social ? (
+              <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                <Stat
+                  label="Your streak"
+                  value={
+                    social.streakCount > 0
+                      ? `🔥 ${social.streakCount}`
+                      : "—"
+                  }
+                />
+                <Stat
+                  label="Best 120s"
+                  value={social.best120 > 0 ? String(social.best120) : "—"}
+                />
+                <Stat
+                  label="Rescue"
+                  value={
+                    social.streakRescueAvailable ? "Available today" : "—"
+                  }
+                />
+              </div>
+            ) : null}
+
+            {social?.streakRescueAvailable ? (
+              <p className="mt-3 text-sm text-terra">
+                Streak rescue: finish a 120s round scoring at least{" "}
+                {Math.max(0, social.best120 - 7)} before the day ends (PT).
+              </p>
+            ) : null}
+
+            <section className="mt-6 rounded-xl bg-surface p-4 shadow-[var(--shadow-border)] sm:p-6">
+              <h2 className="text-xs font-medium tracking-wide text-muted uppercase">
+                Top scores
+              </h2>
+              {error ? (
+                <p className="mt-3 text-sm text-terra">{error}</p>
+              ) : rows == null ? (
+                <p className="mt-3 text-sm text-muted">Loading…</p>
+              ) : (
+                <ul className="mt-3 divide-y divide-border">
+                  {Array.from({ length: 10 }, (_, i) => {
+                    const row = rows[i];
+                    if (!row) {
+                      return (
+                        <li
+                          key={`empty-${i + 1}`}
+                          className="flex items-baseline justify-between gap-3 py-2.5 text-sm"
+                        >
+                          <span className="flex min-w-0 items-baseline gap-3">
+                            <span className="font-mono w-6 shrink-0 tabular-nums text-subtle">
+                              {i + 1}
+                            </span>
+                            <span className="text-subtle">—</span>
+                          </span>
+                          <span className="font-mono shrink-0 tabular-nums text-subtle">
+                            —
+                          </span>
+                        </li>
+                      );
+                    }
+                    const isYou =
+                      social?.displayName != null &&
+                      row.displayName === social.displayName;
+                    return (
+                      <li
+                        key={row.userId}
+                        className="flex items-baseline justify-between gap-3 py-2.5 text-sm"
+                      >
+                        <span className="flex min-w-0 items-baseline gap-3">
+                          <span className="font-mono w-6 shrink-0 tabular-nums text-subtle">
+                            {row.rank}
+                          </span>
+                          <span
+                            className={
+                              isYou
+                                ? "truncate font-medium text-fg"
+                                : "truncate text-fg"
+                            }
+                          >
+                            {row.displayName}
+                            {isYou ? " · you" : ""}
+                          </span>
+                          {row.streakCount > 0 ? (
+                            <span
+                              className="shrink-0 tabular-nums"
+                              style={{ color: "#e85d4c" }}
+                              title={`${row.streakCount}-day streak`}
+                            >
+                              🔥 {row.streakCount}
+                            </span>
+                          ) : null}
+                        </span>
+                        <span className="font-mono shrink-0 tabular-nums text-muted">
+                          {row.best120}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
+          </>
+        )}
+      </div>
+    </AppShell>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg bg-surface px-3 py-3 shadow-[var(--shadow-border)]">
+      <p className="text-[11px] tracking-wide text-muted uppercase">{label}</p>
+      <p className="mt-1 font-mono text-xl tabular-nums text-fg">{value}</p>
+    </div>
+  );
+}

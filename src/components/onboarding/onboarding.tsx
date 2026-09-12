@@ -15,9 +15,11 @@ import {
   isIntroDone,
   normalizeDisplayName,
   readIntroStep,
+  readPendingDisplayName,
   readTraineeName,
   subscribeIntro,
   writeIntroStep,
+  writePendingDisplayName,
   writeTraineeName,
   type IntroStep,
 } from "@/lib/game/trainee";
@@ -88,12 +90,15 @@ export function OnboardingGate({ children }: { children: ReactNode }) {
 function Onboarding() {
   const [step, setStep] = useState<IntroStep>(() => readIntroStep());
   const [name, setName] = useState(() => readTraineeName());
+  const [displayName, setDisplayName] = useState(() => readPendingDisplayName());
   const [missedName, setMissedName] = useState(false);
+  const [missedDisplay, setMissedDisplay] = useState(false);
   const [showOpen, setShowOpen] = useState(() => {
     if (typeof window === "undefined") return true;
     return !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   });
   const inputRef = useRef<HTMLInputElement>(null);
+  const displayRef = useRef<HTMLInputElement>(null);
   const idx = STEPS.indexOf(step);
   const greet = normalizeDisplayName(name);
 
@@ -113,32 +118,52 @@ function Onboarding() {
     return typed;
   }
 
+  function captureDisplay(): string {
+    return normalizeDisplayName(displayRef.current?.value ?? displayName);
+  }
+
   function goHow() {
     const n = captureName();
+    const d = captureDisplay();
     if (!n) {
       setMissedName(true);
       inputRef.current?.focus();
       return;
     }
+    if (!d) {
+      setMissedDisplay(true);
+      displayRef.current?.focus();
+      return;
+    }
     setMissedName(false);
+    setMissedDisplay(false);
     setName(n);
+    setDisplayName(d);
     writeTraineeName(n);
+    writePendingDisplayName(d);
     goTo("how");
   }
 
   function skip() {
     const n = captureName() || normalizeDisplayName(name);
-    completeIntro(n);
+    const d = captureDisplay() || normalizeDisplayName(displayName);
+    completeIntro(n, d || undefined);
   }
 
   function finish() {
     const n = normalizeDisplayName(name) || captureName();
+    const d = normalizeDisplayName(displayName) || captureDisplay();
     if (!n) {
       goTo("hello");
       setMissedName(true);
       return;
     }
-    completeIntro(n);
+    if (!d) {
+      goTo("hello");
+      setMissedDisplay(true);
+      return;
+    }
+    completeIntro(n, d);
   }
 
   return (
@@ -172,11 +197,18 @@ function Onboarding() {
         <div className="mx-auto flex w-full max-w-lg flex-1 flex-col overflow-hidden px-6">
           <HelloBody
             name={name}
+            displayName={displayName}
             missed={missedName}
+            missedDisplay={missedDisplay}
             inputRef={inputRef}
+            displayRef={displayRef}
             onChange={(v) => {
               setName(v);
               if (v) setMissedName(false);
+            }}
+            onDisplayChange={(v) => {
+              setDisplayName(v);
+              if (v) setMissedDisplay(false);
             }}
             onSubmit={goHow}
           />
@@ -244,15 +276,23 @@ function Footer({
 
 function HelloBody({
   name,
+  displayName,
   missed,
+  missedDisplay,
   inputRef,
+  displayRef,
   onChange,
+  onDisplayChange,
   onSubmit,
 }: {
   name: string;
+  displayName: string;
   missed: boolean;
+  missedDisplay: boolean;
   inputRef: RefObject<HTMLInputElement | null>;
+  displayRef: RefObject<HTMLInputElement | null>;
   onChange: (v: string) => void;
+  onDisplayChange: (v: string) => void;
   onSubmit: () => void;
 }) {
   useEffect(() => {
@@ -262,7 +302,8 @@ function HelloBody({
 
   useEffect(() => {
     if (missed) inputRef.current?.focus();
-  }, [missed, inputRef]);
+    else if (missedDisplay) displayRef.current?.focus();
+  }, [missed, missedDisplay, inputRef, displayRef]);
 
   function onKey(e: KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter") {
@@ -295,12 +336,41 @@ function HelloBody({
           autoComplete="off"
           autoCapitalize="words"
           spellCheck={false}
+          enterKeyHint="next"
+          className="name-field"
+        />
+      </div>
+      <div
+        className={cn(
+          "name-field-wrap mt-4",
+          missedDisplay && "name-field-miss",
+        )}
+      >
+        <label htmlFor="display-name" className="sr-only">
+          Display name
+        </label>
+        <input
+          id="display-name"
+          ref={displayRef}
+          value={displayName}
+          onChange={(e) => onDisplayChange(e.target.value)}
+          onInput={(e) => onDisplayChange(e.currentTarget.value)}
+          onKeyDown={onKey}
+          placeholder="display name"
+          maxLength={32}
+          autoComplete="off"
+          autoCapitalize="words"
+          spellCheck={false}
           enterKeyHint="done"
           className="name-field"
         />
       </div>
       <p className="mt-4 text-sm text-muted">
-        {missed ? "Type your name to continue." : "Type your name, then continue."}
+        {missed
+          ? "Type your name to continue."
+          : missedDisplay
+            ? "Add a display name for the leaderboard."
+            : "Your name is what Hone calls you. Display name is public on the leaderboard."}
       </p>
     </div>
   );

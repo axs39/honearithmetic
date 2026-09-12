@@ -1,6 +1,10 @@
 import { useEffect, useRef } from "react";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
-import { isIntroDone, readTraineeName } from "@/lib/game/trainee";
+import {
+  isIntroDone,
+  readPendingDisplayName,
+  readTraineeName,
+} from "@/lib/game/trainee";
 import { useGameStore } from "@/lib/game/store";
 
 function pushCloud(
@@ -14,6 +18,7 @@ function pushCloud(
         data: {
           saveJson: exportJson(),
           username: readTraineeName() || user.displayName || undefined,
+          displayName: readPendingDisplayName() || undefined,
           onboarded: isIntroDone(),
         },
       }),

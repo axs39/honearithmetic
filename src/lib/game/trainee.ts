@@ -1,8 +1,10 @@
 import { kvGet, kvRemove, kvSet } from "./persist";
 
 const NAME_KEY = "hone.traineeName";
+const DISPLAY_KEY = "hone.displayName";
 const INTRO_KEY = "hone.introDone";
 const STEP_KEY = "hone.introStep";
+const GATE_KEY = "hone.displayNameGateShown";
 
 const introListeners = new Set<() => void>();
 
@@ -31,6 +33,19 @@ export function writeTraineeName(name: string): void {
   kvSet(NAME_KEY, n);
 }
 
+export function readPendingDisplayName(): string {
+  return normalizeDisplayName(kvGet(DISPLAY_KEY) ?? "");
+}
+
+export function writePendingDisplayName(name: string): void {
+  const n = normalizeDisplayName(name);
+  if (!n) {
+    kvRemove(DISPLAY_KEY);
+    return;
+  }
+  kvSet(DISPLAY_KEY, n);
+}
+
 export function isIntroDone(): boolean {
   return kvGet(INTRO_KEY) === "1";
 }
@@ -48,10 +63,19 @@ export function writeIntroStep(step: IntroStep): void {
   kvSet(STEP_KEY, step);
 }
 
-export function completeIntro(name: string): void {
+export function completeIntro(name: string, displayName?: string): void {
   writeTraineeName(name);
+  if (displayName !== undefined) writePendingDisplayName(displayName);
   kvSet(INTRO_KEY, "1");
   kvSet("hone.onboarded", "1");
   kvRemove(STEP_KEY);
   notifyIntro();
+}
+
+export function wasDisplayNameGateShown(): boolean {
+  return kvGet(GATE_KEY) === "1";
+}
+
+export function markDisplayNameGateShown(): void {
+  kvSet(GATE_KEY, "1");
 }

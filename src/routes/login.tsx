@@ -9,7 +9,7 @@ import {
   validatePassword,
   validateUsername,
 } from "@/lib/game/account";
-import { completeIntro, readTraineeName, writeTraineeName } from "@/lib/game/trainee";
+import { completeIntro, readPendingDisplayName, readTraineeName, writeTraineeName } from "@/lib/game/trainee";
 import { endGuestSession } from "@/lib/game/identity";
 import { usernameAvailable, saveProfile } from "@/lib/game/profile";
 import {
@@ -127,6 +127,7 @@ function Account() {
           data: {
             saveJson: "{}",
             username: name,
+            displayName: readPendingDisplayName() || undefined,
             onboarded: true,
             requireUsername: true,
           },

@@ -13,6 +13,7 @@ import {
 import {
   completeIntro,
   notifyIntro,
+  readPendingDisplayName,
   readTraineeName,
   writeTraineeName,
 } from "@/lib/game/trainee";
@@ -104,6 +105,18 @@ export function SessionBoot({ children }: { children: ReactNode }) {
         if (row?.onboarded || guest.intro) completeIntro(name);
         if (row?.save && row.save.sessions.length > 0) {
           hydrateRemote(row.save);
+        }
+        const pendingDn = readPendingDisplayName();
+        if (pendingDn) {
+          void import("@/lib/game/leaderboard")
+            .then(({ setDisplayName, getSocialStatus }) =>
+              getSocialStatus().then((s) => {
+                if (s.needsDisplayName) {
+                  return setDisplayName({ data: { displayName: pendingDn } });
+                }
+              }),
+            )
+            .catch(() => {});
         }
       })
       .catch(() => {
