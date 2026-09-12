@@ -9,7 +9,7 @@ import {
   YAxis,
 } from "recharts";
 import { AppShell } from "@/components/layout/app-shell";
-import { MulHeatmap } from "@/components/progress/heatmap";
+import { OpPerformancePanel } from "@/components/progress/op-performance";
 import { Button } from "@/components/ui/button";
 import { mulCoverage, rankWeakFacts } from "@/lib/game/adaptive";
 import { formatDurationLabel, formatMs, formatPpm } from "@/lib/game/format";
@@ -84,7 +84,7 @@ export function ProgressView() {
           />
           <Stat label="Streak" value={hydrated ? String(streak || "—") : "—"} />
           <Stat
-            label="Table coverage"
+            label="× coverage"
             value={
               hydrated ? `${coverage.seen}/${coverage.total}` : "—"
             }
@@ -175,7 +175,7 @@ export function ProgressView() {
         </section>
 
         <section className="mt-4 rounded-xl bg-surface p-4 shadow-[var(--shadow-border)] sm:p-6">
-          <MulHeatmap facts={facts} />
+          <OpPerformancePanel facts={facts} sessions={sessions} />
         </section>
 
         <section className="mt-4 rounded-xl bg-surface p-4 shadow-[var(--shadow-border)] sm:p-6">
