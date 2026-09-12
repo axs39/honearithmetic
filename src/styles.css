@@ -144,6 +144,7 @@ html[data-font="simple"] .name-field {
 }
 
 .problem-enter {
+  opacity: 1;
   animation: problemIn var(--motion-fast) var(--ease-smooth-out);
 }
 
@@ -196,8 +197,8 @@ html[data-font="simple"] .name-field {
   never both. Animating both left nested opacity:0 on iOS Safari (content
   stayed invisible / "no animation" on mobile).
 */
-.page-motion > *:not(:only-child),
-.page-motion > *:only-child > * {
+.page-motion:not(.page-motion--play) > *:not(:only-child),
+.page-motion:not(.page-motion--play) > *:only-child > * {
   opacity: 0;
   animation-fill-mode: forwards;
   animation-timing-function: var(--ease-smooth-out);
@@ -351,7 +352,13 @@ html[data-font="simple"] .name-field {
   animation-delay: 40ms;
 }
 
-/* Play: chrome only */
+/* Play: chrome only — never hide problems/numpad */
+.page-motion--play > *:not([data-play-chrome]) {
+  opacity: 1 !important;
+  transform: none !important;
+  filter: none !important;
+  animation: none !important;
+}
 .page-motion--play > [data-play-chrome] {
   opacity: 0;
   transform: translateY(6px);
@@ -379,9 +386,15 @@ html[data-font="simple"] .name-field {
   }
 
   .page-motion--play {
-    opacity: 1;
-    transform: none;
-    animation: none;
+    opacity: 1 !important;
+    transform: none !important;
+    animation: none !important;
+  }
+  .page-motion--play > *:not([data-play-chrome]) {
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+    animation: none !important;
   }
   .page-motion--play > [data-play-chrome] {
     opacity: 0 !important;
