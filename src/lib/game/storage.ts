@@ -122,3 +122,74 @@ export function exportSave(state: SaveState): string {
 export function parseImported(raw: string): SaveState {
   return migrate(JSON.parse(raw));
 }
+
+/**
+ * Union local + remote without dropping either side's sessions.
+ * Used when cloud/profile save arrives after local play (stale remote
+ * used to replace the whole store and Progress "lost" fresh rounds).
+ */
+export function mergeSaves(local: SaveState, remote: SaveState): SaveState {
+  const byId = new Map<string, Session>();
+  for (const sess of remote.sessions ?? []) {
+    if (sess?.id) byId.set(sess.id, sess);
+  }
+  for (const sess of local.sessions ?? []) {
+    if (sess?.id) byId.set(sess.id, sess); // local wins on same id
+  }
+  const sessions = [...byId.values()]
+    .sort((a, b) => (Number(a.at) || 0) - (Number(b.at) || 0))
+    .slice(-80);
+
+  const bestByDuration: Record<string, number> = {
+    ...(remote.bestByDuration ?? {}),
+  };
+  for (const [k, v] of Object.entries(local.bestByDuration ?? {})) {
+    const n = Number(v) || 0;
+    bestByDuration[k] = Math.max(Number(bestByDuration[k]) || 0, n);
+  }
+
+  const facts: FactMap = { ...(remote.facts ?? {}) };
+  for (const [k, f] of Object.entries(local.facts ?? {})) {
+    const cur = facts[k];
+    if (!cur) {
+      facts[k] = f;
+      continue;
+    }
+    // Prefer the richer / more recent fact row.
+    const localSeen = Number(f.lastSeen) || 0;
+    const remoteSeen = Number(cur.lastSeen) || 0;
+    const localAttempts = Number(f.attempts) || 0;
+    const remoteAttempts = Number(cur.attempts) || 0;
+    if (
+      localSeen > remoteSeen ||
+      (localSeen === remoteSeen && localAttempts >= remoteAttempts)
+    ) {
+      facts[k] = f;
+    }
+  }
+
+  const localDay = local.lastPlayDay;
+  const remoteDay = remote.lastPlayDay;
+  let streak = Number(local.streak) || 0;
+  let lastPlayDay = localDay;
+  if (!localDay && remoteDay) {
+    streak = Number(remote.streak) || 0;
+    lastPlayDay = remoteDay;
+  } else if (localDay && remoteDay && remoteDay > localDay) {
+    streak = Number(remote.streak) || 0;
+    lastPlayDay = remoteDay;
+  } else if (localDay && remoteDay && remoteDay === localDay) {
+    streak = Math.max(Number(local.streak) || 0, Number(remote.streak) || 0);
+  }
+
+  return {
+    version: SAVE_VERSION,
+    // Prefer local settings (what the user is actively playing with).
+    settings: local.settings ?? remote.settings,
+    facts,
+    sessions,
+    bestByDuration,
+    streak,
+    lastPlayDay: lastPlayDay ?? null,
+  };
+}

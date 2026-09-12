@@ -72,8 +72,9 @@ export function ProgressView() {
           Progress
         </h1>
         <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted">
-          Stored on this device. Adaptive and Focus modes read this map of your
-          speed — the more you play, the sharper the targeting.
+          Stored on this device (and synced when signed in). The streak here
+          counts any finished round on this browser; the Leaderboard streak only
+          credits finished rounds of 120s or longer, once per day.
         </p>
 
         <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-4">

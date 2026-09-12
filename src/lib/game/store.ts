@@ -6,6 +6,7 @@ import {
   EMPTY_SAVE,
   exportSave,
   loadSave,
+  mergeSaves,
   parseImported,
   type SaveState,
   writeSave,
@@ -105,11 +106,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   hydrateRemote: (save) => {
     if (get().phase === "playing" || get().phase === "paused") return;
+    const merged = mergeSaves(persistable(get()), save);
     set({
-      ...save,
+      ...merged,
       hydrated: true,
     });
-    writeSave(save);
+    writeSave(merged);
     void import("./sync-social").then(({ pushLeaderboardScoresOnce }) => pushLeaderboardScoresOnce());
   },
 
