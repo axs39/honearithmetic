@@ -17,6 +17,12 @@ import {
 import { writePendingDisplayName, writeTraineeName } from "@/lib/game/trainee";
 import { clientTimeZone, pushLeaderboardScoresOnce } from "@/lib/game/sync-social";
 import { cn } from "@/lib/utils";
+import {
+  patchAppearance,
+  readAppearance,
+  type FontMode,
+  type ThemeMode,
+} from "@/lib/appearance";
 
 type Tab = "general" | "privacy";
 
@@ -54,9 +60,11 @@ export function SettingsView() {
           Settings
         </h1>
         <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted">
-          Trainee name is what Hone calls you. Display name is public on the
-          leaderboard only.
+          Appearance is saved on this device. Trainee name is what Hone calls
+          you; display name is public on the leaderboard.
         </p>
+
+        <AppearancePanel />
 
         {isPending ? (
           <p className="mt-8 text-sm text-muted">Loading…</p>
@@ -99,6 +107,99 @@ export function SettingsView() {
         )}
       </div>
     </AppShell>
+  );
+}
+
+function AppearancePanel() {
+  const [theme, setTheme] = useState<ThemeMode>(() => readAppearance().theme);
+  const [font, setFont] = useState<FontMode>(() => readAppearance().font);
+
+  useEffect(() => {
+    const a = readAppearance();
+    setTheme(a.theme);
+    setFont(a.font);
+    patchAppearance(a);
+  }, []);
+
+  function chooseTheme(next: ThemeMode) {
+    setTheme(next);
+    patchAppearance({ theme: next });
+  }
+
+  function chooseFont(next: FontMode) {
+    setFont(next);
+    patchAppearance({ font: next });
+  }
+
+  return (
+    <section className="mt-8 rounded-xl bg-surface p-4 shadow-[var(--shadow-border)] sm:p-6">
+      <h2 className="text-xs font-medium tracking-wide text-muted uppercase">
+        Appearance
+      </h2>
+
+      <p className="mt-4 text-xs font-medium text-muted">Theme</p>
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        {(
+          [
+            { id: "dark" as const, name: "Dark", blurb: "Default desk night" },
+            { id: "light" as const, name: "Light", blurb: "Paper daylight" },
+          ] as const
+        ).map((opt) => (
+          <button
+            key={opt.id}
+            type="button"
+            onClick={() => chooseTheme(opt.id)}
+            className={cn(
+              "rounded-md px-3 py-3 text-left shadow-[var(--shadow-border)] transition-colors",
+              theme === opt.id
+                ? "bg-surface-2 shadow-[var(--shadow-border-hover)]"
+                : "bg-bg/40 hover:bg-surface-2/60",
+            )}
+          >
+            <span className="block text-sm font-medium text-fg">{opt.name}</span>
+            <span className="mt-1 block text-xs text-muted">{opt.blurb}</span>
+          </button>
+        ))}
+      </div>
+
+      <p className="mt-5 text-xs font-medium text-muted">Numbers font</p>
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        {(
+          [
+            {
+              id: "default" as const,
+              name: "Default",
+              blurb: "Display serif (Fraunces)",
+              sampleClass: "font-display italic text-2xl tabular-nums",
+            },
+            {
+              id: "simple" as const,
+              name: "Simple numbers",
+              blurb: "Plain system UI, tabular",
+              sampleClass: "font-sans text-2xl tabular-nums tracking-tight",
+            },
+          ] as const
+        ).map((opt) => (
+          <button
+            key={opt.id}
+            type="button"
+            onClick={() => chooseFont(opt.id)}
+            className={cn(
+              "rounded-md px-3 py-3 text-left shadow-[var(--shadow-border)] transition-colors",
+              font === opt.id
+                ? "bg-surface-2 shadow-[var(--shadow-border-hover)]"
+                : "bg-bg/40 hover:bg-surface-2/60",
+            )}
+          >
+            <span className={cn("block text-fg", opt.sampleClass)}>12 × 8</span>
+            <span className="mt-2 block text-sm font-medium text-fg">
+              {opt.name}
+            </span>
+            <span className="mt-0.5 block text-xs text-muted">{opt.blurb}</span>
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }
 

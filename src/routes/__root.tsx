@@ -11,6 +11,7 @@ import { SessionBoot } from "@/components/session-boot";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import { SaveBootstrap } from "@/components/save-bootstrap";
 import { DisplayNameGate } from "@/components/social/display-name-gate";
+import { AppearanceBoot } from "@/components/appearance/appearance-boot";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import appCss from "../styles.css?url";
 
@@ -81,8 +82,14 @@ function RootComponent() {
     <html lang="en" className="dark antialiased" suppressHydrationWarning>
       <head>
         <HeadContent />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var r=localStorage.getItem("hone.appearance.v1");var a=r?JSON.parse(r):{};var t=a.theme==="light"?"light":"dark";var f=a.font==="simple"?"simple":"default";var e=document.documentElement;e.classList.toggle("dark",t==="dark");e.classList.toggle("light",t==="light");e.dataset.theme=t;e.dataset.font=f;var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute("content",t==="dark"?"#0a0b0d":"#f4f2ec");}catch(e){}})();`,
+          }}
+        />
       </head>
       <body className="bg-bg text-fg font-sans">
+        <AppearanceBoot />
         <PreviewHostBridge />
         <AuthProvider>
           <TooltipProvider>
