@@ -95,7 +95,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       lastResult: null,
     });
     // Backfill best_120 onto leaderboard when signed in (auth errors ignored).
-    void import("./sync-social").then(({ pushBest120Once }) => pushBest120Once());
+    void import("./sync-social").then(({ pushLeaderboardScoresOnce }) => pushLeaderboardScoresOnce());
   },
 
   hydrateRemote: (save) => {
@@ -105,7 +105,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       hydrated: true,
     });
     writeSave(save);
-    void import("./sync-social").then(({ pushBest120Once }) => pushBest120Once());
+    void import("./sync-social").then(({ pushLeaderboardScoresOnce }) => pushLeaderboardScoresOnce());
   },
 
   persist: () => {

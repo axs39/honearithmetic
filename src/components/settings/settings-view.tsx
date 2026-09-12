@@ -15,7 +15,7 @@ import {
   type SocialStatus,
 } from "@/lib/game/leaderboard";
 import { writePendingDisplayName, writeTraineeName } from "@/lib/game/trainee";
-import { clientTimeZone, pushBest120Once } from "@/lib/game/sync-social";
+import { clientTimeZone, pushLeaderboardScoresOnce } from "@/lib/game/sync-social";
 import { cn } from "@/lib/utils";
 
 type Tab = "general" | "privacy";
@@ -43,7 +43,7 @@ export function SettingsView() {
 
   useEffect(() => {
     if (isPending || !signedIn) return;
-    pushBest120Once();
+    pushLeaderboardScoresOnce();
     void refresh();
   }, [signedIn, isPending]);
 

@@ -7,6 +7,7 @@ import {
   calendarDay,
   endOfDayIso,
   resolveTimeZone,
+  weekKeyPT,
   yesterday,
 } from "./pt-day";
 
@@ -49,6 +50,8 @@ type ProfileSocial = {
   streak_rescue_available: boolean;
   streak_rescue_deadline: string | Date | null;
   best_120: number;
+  best_120_week: number;
+  week_key: string | null;
   timezone: string | null;
 };
 
@@ -114,6 +117,8 @@ async function loadSocialRow(
       streak_rescue_available,
       streak_rescue_deadline,
       best_120,
+      best_120_week,
+      week_key,
       timezone
     from profiles
     where user_id = ${userId}
@@ -219,10 +224,29 @@ function providerLabel(providerId: string): string {
   return providerId.replace(/^grok-/, "").replace(/^\w/, (c) => c.toUpperCase());
 }
 
+function mapLeaderboardRows(
+  rows: {
+    user_id: string;
+    display_name: string;
+    streak_count: number;
+    best_120: number;
+  }[],
+): LeaderboardRow[] {
+  return rows.map((r, i) => ({
+    rank: i + 1,
+    displayName: r.display_name,
+    streakCount: Number(r.streak_count) || 0,
+    best120: Number(r.best_120) || 0,
+    userId: r.user_id,
+  }));
+}
+
 export const getLeaderboard = createServerFn({ method: "GET" }).handler(
-  async (): Promise<{ rows: LeaderboardRow[] }> => {
+  async (): Promise<{ allTime: LeaderboardRow[]; weekly: LeaderboardRow[] }> => {
     const sql = await getSql();
-    const rows = await sql<{
+    const currentWeekKey = weekKeyPT();
+
+    const allTimeRows = await sql<{
       user_id: string;
       display_name: string;
       streak_count: number;
@@ -237,14 +261,27 @@ export const getLeaderboard = createServerFn({ method: "GET" }).handler(
       order by best_120 desc, lower(display_name) asc
       limit 10
     `;
+
+    const weeklyRows = await sql<{
+      user_id: string;
+      display_name: string;
+      streak_count: number;
+      best_120: number;
+    }>`
+      select user_id, display_name, streak_count, best_120_week as best_120
+      from profiles
+      where hide_from_leaderboard = false
+        and display_name is not null
+        and trim(display_name) <> ''
+        and week_key = ${currentWeekKey}
+        and best_120_week > 0
+      order by best_120_week desc, lower(display_name) asc
+      limit 10
+    `;
+
     return {
-      rows: rows.map((r, i) => ({
-        rank: i + 1,
-        displayName: r.display_name,
-        streakCount: Number(r.streak_count) || 0,
-        best120: Number(r.best_120) || 0,
-        userId: r.user_id,
-      })),
+      allTime: mapLeaderboardRows(allTimeRows),
+      weekly: mapLeaderboardRows(weeklyRows),
     };
   },
 );
@@ -426,6 +463,48 @@ export const syncBest120 = createServerFn({ method: "POST" })
     };
   });
 
+/**
+ * Push best completed 120s score from sessions in the current PT week only.
+ * Never copies historical all-time into the weekly board.
+ */
+export const syncBest120Week = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((data: { best120Week: number; timeZone?: string }) => data)
+  .handler(async ({ context, data }) => {
+    const score = Math.max(0, Math.floor(Number(data.best120Week) || 0));
+    const sql = await getSql();
+    let row = await loadSocialRow(context.userId, sql);
+    row = await persistTimezoneIfNeeded(
+      context.userId,
+      sql,
+      row,
+      data.timeZone,
+    );
+
+    const currentWeekKey = weekKeyPT();
+    let bestWeek = Number(row.best_120_week) || 0;
+    let weekKey = row.week_key;
+    if (weekKey !== currentWeekKey) {
+      bestWeek = 0;
+      weekKey = currentWeekKey;
+    }
+    bestWeek = Math.max(bestWeek, score);
+
+    await sql`
+      update profiles set
+        best_120_week = ${bestWeek},
+        week_key = ${weekKey},
+        updated_at = now()
+      where user_id = ${context.userId}
+    `;
+
+    return {
+      ok: true as const,
+      best120Week: bestWeek,
+      weekKey,
+    };
+  });
+
 export const recordQualifiedRound = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator(
@@ -466,6 +545,17 @@ export const recordQualifiedRound = createServerFn({ method: "POST" })
     const yday = yesterday(tz, now);
     const bestBefore = Number(row.best_120) || 0;
     const best120 = Math.max(bestBefore, score);
+
+    // Weekly board: fair PT week for all users; reset when week_key rolls.
+    const currentWeekKey = weekKeyPT(now);
+    let bestWeek = Number(row.best_120_week) || 0;
+    let weekKey = row.week_key;
+    if (weekKey !== currentWeekKey) {
+      bestWeek = 0;
+      weekKey = currentWeekKey;
+    }
+    bestWeek = Math.max(bestWeek, score);
+
     const last = asDay(row.streak_last_day, tz);
     let streakCount = Number(row.streak_count) || 0;
     let rescueAvailable = Boolean(row.streak_rescue_available);
@@ -519,6 +609,8 @@ export const recordQualifiedRound = createServerFn({ method: "POST" })
     await sql`
       update profiles set
         best_120 = ${best120},
+        best_120_week = ${bestWeek},
+        week_key = ${weekKey},
         streak_count = ${streakCount},
         streak_last_day = ${streakLastDay},
         streak_rescue_available = ${rescueAvailable},
@@ -532,6 +624,8 @@ export const recordQualifiedRound = createServerFn({ method: "POST" })
       credited,
       streakCount,
       best120,
+      best120Week: bestWeek,
+      weekKey,
       rescued: Boolean(last !== today && last !== yday && credited && streakCount > 1),
     };
   });

@@ -10,24 +10,32 @@ import {
   type LeaderboardRow,
   type SocialStatus,
 } from "@/lib/game/leaderboard";
-import { clientTimeZone, pushBest120Once } from "@/lib/game/sync-social";
+import {
+  clientTimeZone,
+  pushLeaderboardScoresOnce,
+} from "@/lib/game/sync-social";
+
+type BoardTab = "allTime" | "weekly";
 
 export function LeaderboardView() {
   const { user, isPending } = useCurrentUserState();
   const signedIn = Boolean(user && !user.isDevFallback);
-  const [rows, setRows] = useState<LeaderboardRow[] | null>(null);
+  const [allTime, setAllTime] = useState<LeaderboardRow[] | null>(null);
+  const [weekly, setWeekly] = useState<LeaderboardRow[] | null>(null);
   const [social, setSocial] = useState<SocialStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<BoardTab>("allTime");
 
   useEffect(() => {
     if (isPending) return;
     if (!signedIn) {
-      setRows(null);
+      setAllTime(null);
+      setWeekly(null);
       setSocial(null);
       return;
     }
     let cancelled = false;
-    pushBest120Once();
+    pushLeaderboardScoresOnce();
     const tz = clientTimeZone();
     void Promise.all([
       getLeaderboard(),
@@ -35,7 +43,8 @@ export function LeaderboardView() {
     ])
       .then(([board, status]) => {
         if (cancelled) return;
-        setRows(board.rows);
+        setAllTime(board.allTime);
+        setWeekly(board.weekly);
         setSocial(status);
         setError(null);
       })
@@ -47,6 +56,8 @@ export function LeaderboardView() {
       cancelled = true;
     };
   }, [signedIn, isPending]);
+
+  const rows = tab === "allTime" ? allTime : weekly;
 
   return (
     <AppShell>
@@ -119,9 +130,41 @@ export function LeaderboardView() {
             ) : null}
 
             <section className="mt-6 rounded-xl bg-surface p-4 shadow-[var(--shadow-border)] sm:p-6">
-              <h2 className="text-xs font-medium tracking-wide text-muted uppercase">
-                Top scores
-              </h2>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <h2 className="text-xs font-medium tracking-wide text-muted uppercase">
+                  Top scores
+                </h2>
+                <div
+                  role="tablist"
+                  aria-label="Leaderboard period"
+                  className="inline-flex rounded-lg bg-surface-2 p-0.5 shadow-[var(--shadow-border)]"
+                >
+                  <BoardTabButton
+                    active={tab === "allTime"}
+                    onClick={() => setTab("allTime")}
+                  >
+                    All-time
+                  </BoardTabButton>
+                  <BoardTabButton
+                    active={tab === "weekly"}
+                    onClick={() => setTab("weekly")}
+                  >
+                    Weekly
+                  </BoardTabButton>
+                </div>
+              </div>
+
+              {tab === "weekly" ? (
+                <p className="mt-3 text-xs leading-relaxed text-muted">
+                  Best completed 120s this week. Weekly resets Monday midnight
+                  PT.
+                </p>
+              ) : (
+                <p className="mt-3 text-xs leading-relaxed text-muted">
+                  Best completed 120s ever — never resets.
+                </p>
+              )}
+
               {error ? (
                 <p className="mt-3 text-sm text-terra">{error}</p>
               ) : rows == null ? (
@@ -133,7 +176,7 @@ export function LeaderboardView() {
                     if (!row) {
                       return (
                         <li
-                          key={`empty-${i + 1}`}
+                          key={`empty-${tab}-${i + 1}`}
                           className="flex items-baseline justify-between gap-3 py-2.5 text-sm"
                         >
                           <span className="flex min-w-0 items-baseline gap-3">
@@ -153,7 +196,7 @@ export function LeaderboardView() {
                       row.displayName === social.displayName;
                     return (
                       <li
-                        key={row.userId}
+                        key={`${tab}-${row.userId}`}
                         className="flex items-baseline justify-between gap-3 py-2.5 text-sm"
                       >
                         <span className="flex min-w-0 items-baseline gap-3">
@@ -187,6 +230,32 @@ export function LeaderboardView() {
         )}
       </div>
     </AppShell>
+  );
+}
+
+function BoardTabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={
+        active
+          ? "rounded-md bg-surface px-3 py-1.5 text-xs font-medium text-fg shadow-sm"
+          : "rounded-md px-3 py-1.5 text-xs font-medium text-muted hover:text-fg"
+      }
+    >
+      {children}
+    </button>
   );
 }
 

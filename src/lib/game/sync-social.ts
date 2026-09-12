@@ -1,4 +1,5 @@
 import { useGameStore } from "./store";
+import { isInCurrentWeekPT } from "./pt-day";
 
 /** Browser IANA timezone, or Pacific fallback. */
 export function clientTimeZone(): string {
@@ -24,11 +25,29 @@ export function localBest120(): number {
   return Math.max(0, Math.floor(fromMap), Math.floor(fromSessions));
 }
 
+/** Best completed 120s from local sessions in the current PT week only. */
+export function localBest120Week(): number {
+  const s = useGameStore.getState();
+  let best = 0;
+  for (const sess of s.sessions ?? []) {
+    if (
+      sess.duration === 120 &&
+      sess.completed &&
+      isInCurrentWeekPT(Number(sess.at) || 0)
+    ) {
+      best = Math.max(best, Number(sess.score) || 0);
+    }
+  }
+  return Math.max(0, Math.floor(best));
+}
+
 let best120Synced = false;
+let best120WeekSynced = false;
 
 /**
  * Push local best-120 to the server once per page session (when signed in).
  * Safe to call from hydrate / boot / leaderboard / settings — no-ops after success.
+ * All-time only — does not touch the weekly board.
  */
 export function pushBest120Once(): void {
   if (best120Synced) return;
@@ -44,4 +63,30 @@ export function pushBest120Once(): void {
     .catch(() => {
       best120Synced = false;
     });
+}
+
+/**
+ * Push this-PT-week best completed 120s from local sessions (once per page session).
+ * Never copies historical all-time into weekly.
+ */
+export function pushBest120WeekOnce(): void {
+  if (best120WeekSynced) return;
+  if (typeof window === "undefined") return;
+  const best120Week = localBest120Week();
+  if (best120Week <= 0) return;
+  best120WeekSynced = true;
+  const timeZone = clientTimeZone();
+  void import("./leaderboard")
+    .then(({ syncBest120Week }) =>
+      syncBest120Week({ data: { best120Week, timeZone } }),
+    )
+    .catch(() => {
+      best120WeekSynced = false;
+    });
+}
+
+/** Convenience: all-time + weekly backfill when opening leaderboard / hydrate. */
+export function pushLeaderboardScoresOnce(): void {
+  pushBest120Once();
+  pushBest120WeekOnce();
 }

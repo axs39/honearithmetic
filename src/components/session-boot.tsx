@@ -106,8 +106,8 @@ export function SessionBoot({ children }: { children: ReactNode }) {
         if (row?.save && row.save.sessions.length > 0) {
           hydrateRemote(row.save);
         }
-        void import("@/lib/game/sync-social").then(({ pushBest120Once }) =>
-          pushBest120Once(),
+        void import("@/lib/game/sync-social").then(({ pushLeaderboardScoresOnce }) =>
+          pushLeaderboardScoresOnce(),
         );
         const pendingDn = readPendingDisplayName();
         if (pendingDn) {

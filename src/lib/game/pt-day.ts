@@ -81,3 +81,33 @@ export function ptEndOfDayIso(day: string): string {
 export function ptYesterday(date: Date = new Date()): string {
   return yesterday(DEFAULT_TIMEZONE, date);
 }
+
+/**
+ * ISO-like week key for the fair weekly leaderboard, keyed in America/Los_Angeles.
+ * Week starts Monday 00:00 PT. Format: `2026-W37` (ISO week-year + week number).
+ */
+export function weekKeyPT(date: Date = new Date()): string {
+  const day = calendarDay(DEFAULT_TIMEZONE, date);
+  const [y, m, d] = day.split("-").map(Number);
+  // Civil date as UTC noon-safe: use UTC midnight of that Y-M-D for ISO arithmetic.
+  const utc = new Date(Date.UTC(y, m - 1, d));
+  // ISO weekday: Mon=1 … Sun=7
+  const isoDow = utc.getUTCDay() === 0 ? 7 : utc.getUTCDay();
+  // Thursday of this ISO week determines the week-year
+  utc.setUTCDate(utc.getUTCDate() + 4 - isoDow);
+  const weekYear = utc.getUTCFullYear();
+  const yearStart = new Date(Date.UTC(weekYear, 0, 1));
+  const weekNo = Math.ceil(
+    ((utc.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7,
+  );
+  return `${weekYear}-W${String(weekNo).padStart(2, "0")}`;
+}
+
+/** True if `atMs` falls in the current PT ISO-like week (same key as weekKeyPT(now)). */
+export function isInCurrentWeekPT(
+  atMs: number,
+  now: Date = new Date(),
+): boolean {
+  if (!Number.isFinite(atMs)) return false;
+  return weekKeyPT(new Date(atMs)) === weekKeyPT(now);
+}
