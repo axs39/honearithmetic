@@ -128,7 +128,7 @@ export function CompareView() {
                 <Marker left={traderPct} label="Trader" strong />
                 <Marker left={elitePct} label="Elite" />
                 <span
-                  className="absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-fg shadow-[var(--shadow-border-hover)] transition-[left] duration-75 linear"
+                  className="absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-fg shadow-[var(--shadow-border-hover)]"
                   style={{ left: `${youPct}%` }}
                   title="You"
                 />
