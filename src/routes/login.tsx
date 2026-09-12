@@ -48,6 +48,25 @@ function Login() {
   );
 }
 
+
+function friendlyAuthError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err ?? "");
+  if (
+    /ENOENT|pglite\.data|DatabaseUnavailable|temporarily unavailable|database is not configured/i.test(
+      msg,
+    )
+  ) {
+    return "Accounts are temporarily unavailable. Try again in a bit.";
+  }
+  if (/invalid origin/i.test(msg)) {
+    return "Sign-in is misconfigured for this site address. Try again shortly.";
+  }
+  if (/invalid email or password|invalid credentials|user not found/i.test(msg)) {
+    return "Wrong username or password.";
+  }
+  return msg || "Something went wrong.";
+}
+
 function Account() {
   const navigate = useNavigate();
   const { isPending } = useCurrentUserState();
@@ -132,7 +151,7 @@ function Account() {
       endGuestSession();
       void navigate({ to: "/" });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
+      setError(friendlyAuthError(err));
     } finally {
       setBusy(false);
     }

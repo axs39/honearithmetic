@@ -11,12 +11,49 @@ const databaseUrl =
   rawDatabaseUrl && rawDatabaseUrl.trim() ? rawDatabaseUrl : undefined;
 
 /**
+ * Vercel / AWS Lambda (and similar) have a read-only or ephemeral filesystem.
+ * PGLite's on-disk bootstrap (`pglite.data` under `/var/task`) fails with ENOENT
+ * there — never fall back to it on serverless. Local `npm run dev` is fine.
+ */
+export function isServerlessRuntime(): boolean {
+  if (typeof process === "undefined") return false;
+  const e = process.env;
+  return Boolean(
+    e.VERCEL ||
+      e.VERCEL_ENV ||
+      e.AWS_LAMBDA_FUNCTION_NAME ||
+      e.LAMBDA_TASK_ROOT ||
+      e.NETLIFY ||
+      e.CF_PAGES,
+  );
+}
+
+/** Thrown when prod/serverless has no DATABASE_URL — never expose filesystem paths. */
+export class DatabaseUnavailableError extends Error {
+  constructor(
+    message = "Accounts are temporarily unavailable. The database is not configured.",
+  ) {
+    super(message);
+    this.name = "DatabaseUnavailableError";
+  }
+}
+
+/**
  * Active backend: real **Neon** when `DATABASE_URL` is set (deployed / configured
  * sandbox), otherwise a local embedded **PGLite** (Postgres compiled to WASM) so
  * the app has a working database even with nothing configured — the live preview
  * included. Swap in Neon later by just setting `DATABASE_URL`; no code changes.
+ * On serverless without DATABASE_URL we still report "pglite" as the would-be
+ * source, but getSql()/auth refuse to open it (see assertPgliteAllowed).
  */
 export const dbSource: DbSource = databaseUrl ? "neon" : "pglite";
+
+export function assertPgliteAllowed(): void {
+  if (databaseUrl) return;
+  if (isServerlessRuntime()) {
+    throw new DatabaseUnavailableError();
+  }
+}
 
 /**
  * Minimal shared SQL surface, satisfied by both Neon and PGLite. Both the
@@ -106,6 +143,7 @@ function createNeonSql(): Promise<Sql> {
 }
 
 async function createPgliteSql(): Promise<Sql> {
+  assertPgliteAllowed();
   // Embedded Postgres, imported on demand so it never loads on the Neon path.
   // One in-memory instance per process, shared across HMR module instances, so
   // data survives source edits (it resets on dev-server restart).
@@ -203,6 +241,7 @@ export async function getPglite(): Promise<import("@electric-sql/pglite").PGlite
   if (dbSource !== "pglite") {
     throw new Error("getPglite() is only available on the PGLite fallback (no DATABASE_URL)");
   }
+  assertPgliteAllowed();
   await getSql();
   const pg = await globalRef.__pgliteInstance__;
   if (!pg) throw new Error("PGLite instance failed to initialize");
@@ -229,7 +268,7 @@ export function ensureDbReady(): Promise<void> {
 const globalBoot = globalThis as typeof globalThis & {
   __pgBootstrapPromise__?: Promise<void>;
 };
-if (typeof window === "undefined" && dbSource === "pglite") {
+if (typeof window === "undefined" && dbSource === "pglite" && !isServerlessRuntime()) {
   globalBoot.__pgBootstrapPromise__ ??= ensureDbReady().catch((err) => {
     globalBoot.__pgBootstrapPromise__ = undefined;
     console.error("[db] PGLite bootstrap failed:", err);

@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { Pause } from "lucide-react";
+import { Pause, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Numpad } from "@/components/game/numpad";
 import { ResultsView } from "@/components/game/results-view";
@@ -31,6 +31,7 @@ export function PlayView() {
   const pause = useGameStore((s) => s.pause);
   const resume = useGameStore((s) => s.resume);
   const goIdle = useGameStore((s) => s.goIdle);
+  const playAgain = useGameStore((s) => s.playAgain);
   const hydrate = useGameStore((s) => s.hydrate);
 
   const [input, setInput] = useState("");
@@ -232,7 +233,18 @@ export function PlayView() {
           Pause
         </button>
         <span className="font-display italic text-muted">Hone</span>
-        <span className="w-8" />
+        <button
+          type="button"
+          onClick={() => {
+            unlockAudio();
+            playAgain();
+          }}
+          className="flex h-11 items-center gap-1.5 text-sm text-muted hover:text-fg"
+          aria-label="Restart session"
+        >
+          <RotateCcw className="size-4" />
+          Restart
+        </button>
       </header>
 
       <div className="mt-4 flex items-end justify-between px-5 sm:px-8">
@@ -332,6 +344,16 @@ export function PlayView() {
             <div className="mt-6 flex flex-col gap-2">
               <Button onClick={resume} size="lg">
                 Resume
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  unlockAudio();
+                  playAgain();
+                }}
+                size="lg"
+              >
+                Restart
               </Button>
               <Button variant="secondary" onClick={finishEarly} size="lg">
                 End session

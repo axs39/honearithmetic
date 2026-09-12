@@ -34,9 +34,12 @@ git push -u origin main
 3. Add a Postgres database (Neon is the usual free option) and set `DATABASE_URL`.
 4. Set:
 
-   - `BETTER_AUTH_SECRET` — a long random string
-   - `BETTER_AUTH_URL` — your public origin, e.g. `https://your-app.vercel.app`
+   - `BETTER_AUTH_SECRET` — a long random string (`openssl rand -hex 32`)
+   - `BETTER_AUTH_URL` — your public origin, e.g. `https://honearithmetic.trade`
+   - `BETTER_AUTH_TRUSTED_ORIGINS` — optional comma-separated extras (e.g. `https://hone-vercel-2.vercel.app`) so both the custom domain and the `*.vercel.app` URL can sign in
    - `VITE_AUTH_ENABLED` — omit it, or anything other than `"false"`
+
+Without `DATABASE_URL`, signup/signin on Vercel will refuse (PGLite cannot run on serverless). Guest play still works.
 
 5. Deploy. Vercel gives you `your-app.vercel.app`. Add a custom domain in the Vercel project if you want.
 

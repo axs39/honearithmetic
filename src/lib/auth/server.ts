@@ -35,7 +35,11 @@ import { tanstackStartCookies } from "better-auth/tanstack-start";
 import { getCookie } from "@tanstack/react-start/server";
 import { randomBytes } from "node:crypto";
 import { Pool } from "pg";
-import { ensureDbReady, getPglite } from "../db";
+import {
+  ensureDbReady,
+  getPglite,
+  isServerlessRuntime,
+} from "../db";
 import { emailAndPasswordEnabled } from "./email-password";
 import { GATE_PROVIDER_ID, gateIdentitySessions } from "./gate-session.server";
 import { GROK_PROVIDERS } from "./providers";
@@ -47,8 +51,7 @@ import {
   PREVIEW_CLIENT_SECRET,
 } from "./preview";
 
-// Kick (and share) PGLite bootstrap as soon as the auth server module loads.
-void ensureDbReady();
+// PGLite bootstrap is kicked after DATABASE_URL is resolved (see below).
 
 /**
  * Preview secret must outlive module reloads: PGLite (and its session rows) is
@@ -115,17 +118,45 @@ const baseURL = explicitBaseURL ?? {
 
 // Origins Better Auth accepts on credentialed POSTs (sign-up/sign-in, etc.).
 // Missing entries here surface as FORBIDDEN "Invalid origin".
+// Extra public origins (comma-separated), e.g. the *.vercel.app twin of a
+// custom domain. Empty/whitespace entries are dropped.
+const extraTrustedOrigins: string[] = (env("BETTER_AUTH_TRUSTED_ORIGINS") ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+// Always allow the known production hosts for this app so a custom domain
+// deploy does not break credentialed POSTs with "Invalid origin".
+const KNOWN_PROD_ORIGINS: string[] = [
+  "https://honearithmetic.trade",
+  "https://www.honearithmetic.trade",
+  "https://hone-vercel-2.vercel.app",
+];
+
 const trustedOrigins: string[] = explicitBaseURL
-  ? [explicitBaseURL, ...LOCAL_DEV_ORIGINS]
+  ? [
+      explicitBaseURL,
+      ...KNOWN_PROD_ORIGINS,
+      ...extraTrustedOrigins,
+      ...LOCAL_DEV_ORIGINS,
+    ]
   : [
       // Host wildcards (matched against Origin's host)
       ...previewAllowedHosts,
       // Full-origin wildcards (matched against Origin)
       ...previewAllowedHosts.flatMap((host) => [`https://${host}`, `http://${host}`]),
+      ...KNOWN_PROD_ORIGINS,
+      ...extraTrustedOrigins,
       ...LOCAL_DEV_ORIGINS,
     ];
 
 const databaseUrl = env("DATABASE_URL");
+
+// Kick (and share) PGLite bootstrap once we know we are not on
+// serverless-without-Postgres (opening PGLite there crashes with ENOENT).
+if (!(isServerlessRuntime() && !databaseUrl)) {
+  void ensureDbReady();
+}
 
 // Static broker OAuth endpoints (skip OIDC discovery on every sign-in / callback).
 // Discovery would cost an extra network hop to the broker before the popup can
@@ -141,6 +172,8 @@ const grokUserInfoUrl = `${issuerBase}/api/auth/oauth2/userinfo`;
 // SAME DB as app data, including email/password users. Both use the Better Auth
 // schema from `migrations/auth/0001_auth.sql`, copied into `migrations/` when
 // the app turns sign-in on.
+// PGLite dialect opens lazily via getPglite(), which refuses serverless
+// without DATABASE_URL (clear error instead of ENOENT on /var/task).
 const database = databaseUrl
   ? new Pool({ connectionString: databaseUrl })
   : { dialect: pgliteDialect(() => getPglite()), type: "postgres" as const };

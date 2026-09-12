@@ -41,10 +41,51 @@ function placePair(
   return null;
 }
 
-export function randomProblem(settings: GameSettings, op?: Op): Problem | null {
+/** Prefer ops that haven't appeared in the last few questions (no topic blocks). */
+function pickOpDiverse(ops: Op[], recentOps: Op[]): Op {
+  if (ops.length === 1) return ops[0]!;
+  const weights = ops.map((op) => {
+    let streak = 0;
+    for (let i = recentOps.length - 1; i >= 0; i -= 1) {
+      if (recentOps[i] === op) streak += 1;
+      else break;
+    }
+    const last = recentOps[recentOps.length - 1];
+    const prev = recentOps[recentOps.length - 2];
+    // Hard-avoid continuing a same-op streak; soft-penalize the prior op.
+    if (streak >= 2) return 0.02;
+    if (op === last) return 0.08;
+    if (op === prev) return 0.45;
+    // Boost ops missing from the recent window.
+    const recentHits = recentOps.filter((o) => o === op).length;
+    return 1.2 + Math.max(0, 3 - recentHits) * 0.35;
+  });
+  const total = weights.reduce((s, w) => s + w, 0);
+  let r = Math.random() * total;
+  for (let i = 0; i < ops.length; i += 1) {
+    r -= weights[i]!;
+    if (r <= 0) return ops[i]!;
+  }
+  return ops[ops.length - 1]!;
+}
+
+function recentOpsFromKeys(recentKeys: string[]): Op[] {
+  const out: Op[] = [];
+  for (const key of recentKeys) {
+    const parsed = parseFactKey(key);
+    if (parsed) out.push(parsed.op);
+  }
+  return out;
+}
+
+export function randomProblem(
+  settings: GameSettings,
+  op?: Op,
+  recentOps: Op[] = [],
+): Problem | null {
   const ops = op ? [op] : enabledOps(settings);
   if (ops.length === 0) return null;
-  const chosen = pick(ops);
+  const chosen = op ? op : pickOpDiverse(ops, recentOps);
 
   for (let attempt = 0; attempt < 24; attempt++) {
     if (chosen === "add") {
@@ -185,6 +226,7 @@ export function nextProblem(
   lastKey?: string,
 ): Problem {
   const ops = enabledOps(settings);
+  const recentOps = recentOpsFromKeys(recentKeys);
   const fallback: Problem = {
     op: "add",
     a: 2,
@@ -197,10 +239,33 @@ export function nextProblem(
   const mode = settings.mode;
   const makeRandom = () => {
     for (let i = 0; i < 12; i++) {
-      const p = randomProblem(settings);
+      const p = randomProblem(settings, undefined, recentOps);
       if (p && p.key !== lastKey) return p;
     }
-    return randomProblem(settings) ?? fallback;
+    return randomProblem(settings, undefined, recentOps) ?? fallback;
+  };
+
+  const seedPerOp = (into: Problem[]) => {
+    // Guarantee each enabled op shows up in the pool so weighting can't
+    // collapse into a same-op segment.
+    for (const op of ops) {
+      const p = randomProblem(settings, op, recentOps);
+      if (p && p.key !== lastKey) into.push(p);
+    }
+  };
+
+  const withDiversity = (p: Problem, base: number): number => {
+    let streak = 0;
+    for (let i = recentOps.length - 1; i >= 0; i -= 1) {
+      if (recentOps[i] === p.op) streak += 1;
+      else break;
+    }
+    const last = recentOps[recentOps.length - 1];
+    let mult = 1;
+    if (p.op === last) mult *= streak >= 1 ? 0.06 : 0.2;
+    else mult *= 1.25;
+    if (streak >= 2 && p.op === last) mult *= 0.15;
+    return Math.max(0.01, base * mult);
   };
 
   if (mode === "classic") return makeRandom();
@@ -210,6 +275,7 @@ export function nextProblem(
 
   if (mode === "focus" && usableWeak.length >= 4) {
     const candidates: Problem[] = [];
+    seedPerOp(candidates);
     for (const f of usableWeak) {
       const p = problemFromFact(f, settings);
       if (p && p.key !== lastKey) candidates.push(p);
@@ -222,14 +288,15 @@ export function nextProblem(
     }
     if (candidates.length === 0) return makeRandom();
     const weights = candidates.map((p) =>
-      weightForProblem(p, facts, recentKeys, "focus"),
+      withDiversity(p, weightForProblem(p, facts, recentKeys, "focus")),
     );
     return weightedPick(candidates, weights);
   }
 
   const candidates: Problem[] = [];
+  seedPerOp(candidates);
   for (let i = 0; i < 16; i++) {
-    const p = randomProblem(settings);
+    const p = randomProblem(settings, undefined, recentOps);
     if (p && p.key !== lastKey) candidates.push(p);
   }
   for (const f of usableWeak) {
@@ -242,7 +309,7 @@ export function nextProblem(
   }
   if (candidates.length === 0) return makeRandom();
   const weights = candidates.map((p) =>
-    weightForProblem(p, facts, recentKeys, "adaptive"),
+    withDiversity(p, weightForProblem(p, facts, recentKeys, "adaptive")),
   );
   return weightedPick(candidates, weights);
 }
