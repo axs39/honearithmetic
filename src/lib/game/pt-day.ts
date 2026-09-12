@@ -1,11 +1,29 @@
-/** Pacific Time calendar helpers (America/Los_Angeles). */
+/** Calendar-day helpers in an IANA timezone (fallback America/Los_Angeles). */
 
-const PT = "America/Los_Angeles";
+export const DEFAULT_TIMEZONE = "America/Los_Angeles";
 
-/** YYYY-MM-DD for the given instant in Pacific Time. */
-export function ptCalendarDay(date: Date = new Date()): string {
+/** Return a safe IANA timezone; invalid / empty → America/Los_Angeles. */
+export function resolveTimeZone(tz: string | null | undefined): string {
+  if (!tz || typeof tz !== "string") return DEFAULT_TIMEZONE;
+  const trimmed = tz.trim();
+  if (!trimmed) return DEFAULT_TIMEZONE;
+  try {
+    // Throws RangeError for unknown zones.
+    Intl.DateTimeFormat("en-US", { timeZone: trimmed }).format(new Date());
+    return trimmed;
+  } catch {
+    return DEFAULT_TIMEZONE;
+  }
+}
+
+/** YYYY-MM-DD for the given instant in `tz`. */
+export function calendarDay(
+  tz: string | null | undefined,
+  date: Date = new Date(),
+): string {
+  const zone = resolveTimeZone(tz);
   return new Intl.DateTimeFormat("en-CA", {
-    timeZone: PT,
+    timeZone: zone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -22,25 +40,44 @@ export function addCalendarDays(day: string, delta: number): string {
   return `${yy}-${mm}-${dd}`;
 }
 
-/** First UTC instant whose PT calendar date equals `day`. */
-export function ptStartOfDayUtc(day: string): Date {
+/** First UTC instant whose calendar date in `tz` equals `day`. */
+export function startOfDayUtc(day: string, tz: string | null | undefined): Date {
+  const zone = resolveTimeZone(tz);
   const anchor = Date.parse(`${day}T12:00:00.000Z`);
   let lo = anchor - 14 * 3600_000;
   let hi = anchor + 14 * 3600_000;
   while (hi - lo > 1) {
     const mid = Math.floor((lo + hi) / 2);
-    if (ptCalendarDay(new Date(mid)) < day) lo = mid;
+    if (calendarDay(zone, new Date(mid)) < day) lo = mid;
     else hi = mid;
   }
   return new Date(hi);
 }
 
-/** End of the PT calendar day as an ISO string (last ms of that day in PT). */
-export function ptEndOfDayIso(day: string): string {
+/** End of the calendar day in `tz` as an ISO string (last ms of that day). */
+export function endOfDayIso(day: string, tz: string | null | undefined): string {
   const next = addCalendarDays(day, 1);
-  return new Date(ptStartOfDayUtc(next).getTime() - 1).toISOString();
+  return new Date(startOfDayUtc(next, tz).getTime() - 1).toISOString();
 }
 
+export function yesterday(
+  tz: string | null | undefined,
+  date: Date = new Date(),
+): string {
+  return addCalendarDays(calendarDay(tz, date), -1);
+}
+
+/** @deprecated Prefer calendarDay(DEFAULT_TIMEZONE, date) */
+export function ptCalendarDay(date: Date = new Date()): string {
+  return calendarDay(DEFAULT_TIMEZONE, date);
+}
+
+/** @deprecated Prefer endOfDayIso(day, DEFAULT_TIMEZONE) */
+export function ptEndOfDayIso(day: string): string {
+  return endOfDayIso(day, DEFAULT_TIMEZONE);
+}
+
+/** @deprecated Prefer yesterday(DEFAULT_TIMEZONE, date) */
 export function ptYesterday(date: Date = new Date()): string {
-  return addCalendarDays(ptCalendarDay(date), -1);
+  return yesterday(DEFAULT_TIMEZONE, date);
 }

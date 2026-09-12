@@ -6,6 +6,7 @@ import {
   readTraineeName,
 } from "@/lib/game/trainee";
 import { useGameStore } from "@/lib/game/store";
+import { pushBest120Once } from "@/lib/game/sync-social";
 
 function pushCloud(
   user: { displayName?: string | null } | null,
@@ -54,6 +55,7 @@ export function SaveBootstrap() {
     persist();
     if (isPending || !remoteReady.current || !signedIn) return;
     pushCloud(user, exportJson);
+    pushBest120Once();
   }, [sessions.length, user, signedIn, isPending, exportJson, persist]);
 
   return null;

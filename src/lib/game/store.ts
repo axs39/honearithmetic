@@ -94,6 +94,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       recentKeys: [],
       lastResult: null,
     });
+    // Backfill best_120 onto leaderboard when signed in (auth errors ignored).
+    void import("./sync-social").then(({ pushBest120Once }) => pushBest120Once());
   },
 
   hydrateRemote: (save) => {
@@ -103,6 +105,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       hydrated: true,
     });
     writeSave(save);
+    void import("./sync-social").then(({ pushBest120Once }) => pushBest120Once());
   },
 
   persist: () => {
@@ -229,15 +232,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
     get().persist();
     // Server streak / best_120 — guests and auth errors are ignored.
     void import("./leaderboard")
-      .then(({ recordQualifiedRound }) =>
-        recordQualifiedRound({
+      .then(async ({ recordQualifiedRound }) => {
+        const { clientTimeZone } = await import("./sync-social");
+        return recordQualifiedRound({
           data: {
             score: session.score,
             duration: session.duration,
             completed: session.completed,
+            timeZone: clientTimeZone(),
           },
-        }),
-      )
+        });
+      })
       .catch(() => {});
   },
 

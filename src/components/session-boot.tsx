@@ -106,16 +106,21 @@ export function SessionBoot({ children }: { children: ReactNode }) {
         if (row?.save && row.save.sessions.length > 0) {
           hydrateRemote(row.save);
         }
+        void import("@/lib/game/sync-social").then(({ pushBest120Once }) =>
+          pushBest120Once(),
+        );
         const pendingDn = readPendingDisplayName();
         if (pendingDn) {
           void import("@/lib/game/leaderboard")
-            .then(({ setDisplayName, getSocialStatus }) =>
-              getSocialStatus().then((s) => {
-                if (s.needsDisplayName) {
-                  return setDisplayName({ data: { displayName: pendingDn } });
-                }
-              }),
-            )
+            .then(async ({ setDisplayName, getSocialStatus }) => {
+              const { clientTimeZone } = await import("@/lib/game/sync-social");
+              const s = await getSocialStatus({
+                data: { timeZone: clientTimeZone() },
+              });
+              if (s.needsDisplayName) {
+                return setDisplayName({ data: { displayName: pendingDn } });
+              }
+            })
             .catch(() => {});
         }
       })

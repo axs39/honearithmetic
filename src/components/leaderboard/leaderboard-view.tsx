@@ -1,7 +1,8 @@
 import { Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
+import { StreakFireCount } from "@/components/leaderboard/streak-fire";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import {
   getLeaderboard,
@@ -9,6 +10,7 @@ import {
   type LeaderboardRow,
   type SocialStatus,
 } from "@/lib/game/leaderboard";
+import { clientTimeZone, pushBest120Once } from "@/lib/game/sync-social";
 
 export function LeaderboardView() {
   const { user, isPending } = useCurrentUserState();
@@ -25,7 +27,12 @@ export function LeaderboardView() {
       return;
     }
     let cancelled = false;
-    void Promise.all([getLeaderboard(), getSocialStatus()])
+    pushBest120Once();
+    const tz = clientTimeZone();
+    void Promise.all([
+      getLeaderboard(),
+      getSocialStatus({ data: { timeZone: tz } }),
+    ])
       .then(([board, status]) => {
         if (cancelled) return;
         setRows(board.rows);
@@ -48,8 +55,10 @@ export function LeaderboardView() {
           Leaderboard
         </h1>
         <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted">
-          Ranked by best completed 120-second score. Streaks count Pacific Time
-          calendar days — finish a full 2-minute round to keep the fire lit.
+          Ranked by best completed 120-second score. Streaks use your local
+          calendar day — finish a full 2-minute round to keep the fire lit. Miss
+          a day and you get two full days after that missed day ends to rescue
+          your streak.
         </p>
 
         {isPending ? (
@@ -77,9 +86,11 @@ export function LeaderboardView() {
                 <Stat
                   label="Your streak"
                   value={
-                    social.streakCount > 0
-                      ? `🔥 ${social.streakCount}`
-                      : "—"
+                    social.streakCount > 0 ? (
+                      <StreakFireCount count={social.streakCount} size={20} />
+                    ) : (
+                      "—"
+                    )
                   }
                 />
                 <Stat
@@ -89,7 +100,7 @@ export function LeaderboardView() {
                 <Stat
                   label="Rescue"
                   value={
-                    social.streakRescueAvailable ? "Available today" : "—"
+                    social.streakRescueAvailable ? "Available" : "—"
                   }
                 />
               </div>
@@ -98,7 +109,12 @@ export function LeaderboardView() {
             {social?.streakRescueAvailable ? (
               <p className="mt-3 text-sm text-terra">
                 Streak rescue: finish a 120s round scoring at least{" "}
-                {Math.max(0, social.best120 - 7)} before the day ends (PT).
+                {Math.max(0, social.best120 - 7)} before your rescue window
+                ends
+                {social.streakRescueDeadline
+                  ? ` (${new Date(social.streakRescueDeadline).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })})`
+                  : ""}
+                .
               </p>
             ) : null}
 
@@ -155,13 +171,7 @@ export function LeaderboardView() {
                             {isYou ? " · you" : ""}
                           </span>
                           {row.streakCount > 0 ? (
-                            <span
-                              className="shrink-0 tabular-nums"
-                              style={{ color: "#e85d4c" }}
-                              title={`${row.streakCount}-day streak`}
-                            >
-                              🔥 {row.streakCount}
-                            </span>
+                            <StreakFireCount count={row.streakCount} size={14} />
                           ) : null}
                         </span>
                         <span className="font-mono shrink-0 tabular-nums text-muted">
@@ -180,7 +190,7 @@ export function LeaderboardView() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="rounded-lg bg-surface px-3 py-3 shadow-[var(--shadow-border)]">
       <p className="text-[11px] tracking-wide text-muted uppercase">{label}</p>

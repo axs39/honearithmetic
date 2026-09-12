@@ -4,9 +4,10 @@ import { authMiddleware } from "@/lib/auth/middleware";
 import { normalizeDisplayName } from "./trainee";
 import {
   addCalendarDays,
-  ptCalendarDay,
-  ptEndOfDayIso,
-  ptYesterday,
+  calendarDay,
+  endOfDayIso,
+  resolveTimeZone,
+  yesterday,
 } from "./pt-day";
 
 const DISPLAY_CHANGE_MS = 90 * 24 * 60 * 60 * 1000; // ~3 months
@@ -35,6 +36,7 @@ export type SocialStatus = {
   needsDisplayName: boolean;
   hasPassword: boolean;
   signedInWith: string[];
+  timezone: string | null;
 };
 
 type ProfileSocial = {
@@ -47,6 +49,7 @@ type ProfileSocial = {
   streak_rescue_available: boolean;
   streak_rescue_deadline: string | Date | null;
   best_120: number;
+  timezone: string | null;
 };
 
 function asIso(v: string | Date | null | undefined): string | null {
@@ -55,10 +58,13 @@ function asIso(v: string | Date | null | undefined): string | null {
   return v.toISOString();
 }
 
-function asDay(v: string | Date | null | undefined): string | null {
+function asDay(
+  v: string | Date | null | undefined,
+  tz: string,
+): string | null {
   if (v == null) return null;
   if (typeof v === "string") return v.slice(0, 10);
-  return ptCalendarDay(v);
+  return calendarDay(tz, v);
 }
 
 function normalizePublicDisplayName(raw: string): string {
@@ -75,6 +81,13 @@ function canChangeAt(changedAt: string | null, now = Date.now()): {
   const next = t + DISPLAY_CHANGE_MS;
   if (now >= next) return { can: true, next: null };
   return { can: false, next: new Date(next).toISOString() };
+}
+
+function pickTimeZone(
+  stored: string | null | undefined,
+  provided: string | null | undefined,
+): string {
+  return resolveTimeZone(provided || stored || undefined);
 }
 
 async function ensureProfile(userId: string, sql: Awaited<ReturnType<typeof getSql>>) {
@@ -100,7 +113,8 @@ async function loadSocialRow(
       streak_last_day::text as streak_last_day,
       streak_rescue_available,
       streak_rescue_deadline,
-      best_120
+      best_120,
+      timezone
     from profiles
     where user_id = ${userId}
   `;
@@ -111,33 +125,61 @@ async function loadSocialRow(
   return row;
 }
 
+async function persistTimezoneIfNeeded(
+  userId: string,
+  sql: Awaited<ReturnType<typeof getSql>>,
+  row: ProfileSocial,
+  provided: string | null | undefined,
+): Promise<ProfileSocial> {
+  if (!provided) return row;
+  const resolved = resolveTimeZone(provided);
+  if (row.timezone === resolved) return row;
+  await sql`
+    update profiles set
+      timezone = ${resolved},
+      updated_at = now()
+    where user_id = ${userId}
+  `;
+  return { ...row, timezone: resolved };
+}
+
+/**
+ * Rescue window: last streak day = L, first missed = L+1, deadline = end of L+3
+ * (two full days after the first missed day ends). Do not shorten an existing deadline.
+ */
 async function syncRescueFlags(
   userId: string,
   row: ProfileSocial,
   sql: Awaited<ReturnType<typeof getSql>>,
+  tz: string,
   now = new Date(),
 ): Promise<ProfileSocial> {
-  const today = ptCalendarDay(now);
-  const yesterday = ptYesterday(now);
-  const last = asDay(row.streak_last_day);
+  const yday = yesterday(tz, now);
+  const last = asDay(row.streak_last_day, tz);
   let streakCount = Number(row.streak_count) || 0;
   let rescueAvailable = Boolean(row.streak_rescue_available);
   let rescueDeadline = asIso(row.streak_rescue_deadline);
 
   let changed = false;
 
-  if (streakCount > 0 && last && last < yesterday) {
-    if (rescueAvailable && rescueDeadline && Date.parse(rescueDeadline) < now.getTime()) {
+  if (streakCount > 0 && last && last < yday) {
+    if (
+      rescueAvailable &&
+      rescueDeadline &&
+      Date.parse(rescueDeadline) < now.getTime()
+    ) {
       streakCount = 0;
       rescueAvailable = false;
       rescueDeadline = null;
       changed = true;
     } else if (!rescueAvailable) {
+      // Open rescue: deadline = end of L+3 in user TZ.
       rescueAvailable = true;
-      rescueDeadline = ptEndOfDayIso(today);
+      rescueDeadline = endOfDayIso(addCalendarDays(last, 3), tz);
       changed = true;
     }
-  } else if (last && last >= yesterday) {
+    // If already open: do not shorten (or otherwise alter) the existing deadline.
+  } else if (last && last >= yday) {
     if (rescueAvailable) {
       rescueAvailable = false;
       rescueDeadline = null;
@@ -209,10 +251,18 @@ export const getLeaderboard = createServerFn({ method: "GET" }).handler(
 
 export const getSocialStatus = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
-  .handler(async ({ context }): Promise<SocialStatus> => {
+  .validator((data: { timeZone?: string } | undefined) => data ?? {})
+  .handler(async ({ context, data }): Promise<SocialStatus> => {
     const sql = await getSql();
     let row = await loadSocialRow(context.userId, sql);
-    row = await syncRescueFlags(context.userId, row, sql);
+    row = await persistTimezoneIfNeeded(
+      context.userId,
+      sql,
+      row,
+      data.timeZone,
+    );
+    const tz = pickTimeZone(row.timezone, data.timeZone);
+    row = await syncRescueFlags(context.userId, row, sql, tz);
 
     const accounts = await sql<{ providerId: string }>`
       select "providerId" as "providerId"
@@ -246,13 +296,14 @@ export const getSocialStatus = createServerFn({ method: "GET" })
       nextDisplayNameChangeAt: displayName ? change.next : null,
       hideFromLeaderboard: Boolean(row.hide_from_leaderboard),
       streakCount: Number(row.streak_count) || 0,
-      streakLastDay: asDay(row.streak_last_day),
+      streakLastDay: asDay(row.streak_last_day, tz),
       streakRescueAvailable: Boolean(row.streak_rescue_available),
       streakRescueDeadline: asIso(row.streak_rescue_deadline),
       best120: Number(row.best_120) || 0,
       needsDisplayName: !displayName,
       hasPassword,
       signedInWith,
+      timezone: row.timezone,
     };
   });
 
@@ -340,10 +391,50 @@ export const setPrivacy = createServerFn({ method: "POST" })
     return { ok: true as const, hideFromLeaderboard: Boolean(data.hideFromLeaderboard) };
   });
 
+export const syncBest120 = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((data: { best120: number; timeZone?: string }) => data)
+  .handler(async ({ context, data }) => {
+    const best120 = Math.max(0, Math.floor(Number(data.best120) || 0));
+    const sql = await getSql();
+    await ensureProfile(context.userId, sql);
+
+    if (data.timeZone) {
+      const tz = resolveTimeZone(data.timeZone);
+      await sql`
+        update profiles set
+          best_120 = greatest(best_120, ${best120}),
+          timezone = ${tz},
+          updated_at = now()
+        where user_id = ${context.userId}
+      `;
+    } else {
+      await sql`
+        update profiles set
+          best_120 = greatest(best_120, ${best120}),
+          updated_at = now()
+        where user_id = ${context.userId}
+      `;
+    }
+
+    const rows = await sql<{ best_120: number }>`
+      select best_120 from profiles where user_id = ${context.userId}
+    `;
+    return {
+      ok: true as const,
+      best120: Number(rows[0]?.best_120) || best120,
+    };
+  });
+
 export const recordQualifiedRound = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator(
-    (data: { score: number; duration: number; completed: boolean }) => data,
+    (data: {
+      score: number;
+      duration: number;
+      completed: boolean;
+      timeZone?: string;
+    }) => data,
   )
   .handler(async ({ context, data }) => {
     if (!data.completed) {
@@ -357,18 +448,25 @@ export const recordQualifiedRound = createServerFn({ method: "POST" })
 
     const sql = await getSql();
     let row = await loadSocialRow(context.userId, sql);
-    row = await syncRescueFlags(context.userId, row, sql);
+    row = await persistTimezoneIfNeeded(
+      context.userId,
+      sql,
+      row,
+      data.timeZone,
+    );
+    const tz = pickTimeZone(row.timezone, data.timeZone);
+    row = await syncRescueFlags(context.userId, row, sql, tz);
 
     if (duration < 120) {
       return { ok: true as const, credited: false as const };
     }
 
     const now = new Date();
-    const today = ptCalendarDay(now);
-    const yesterday = ptYesterday(now);
+    const today = calendarDay(tz, now);
+    const yday = yesterday(tz, now);
     const bestBefore = Number(row.best_120) || 0;
     const best120 = Math.max(bestBefore, score);
-    const last = asDay(row.streak_last_day);
+    const last = asDay(row.streak_last_day, tz);
     let streakCount = Number(row.streak_count) || 0;
     let rescueAvailable = Boolean(row.streak_rescue_available);
     let rescueDeadline = asIso(row.streak_rescue_deadline);
@@ -408,7 +506,7 @@ export const recordQualifiedRound = createServerFn({ method: "POST" })
         rescueAvailable = false;
         rescueDeadline = null;
       }
-    } else if (last === yesterday) {
+    } else if (last === yday) {
       streakCount = streakCount + 1;
       credited = true;
     } else {
@@ -434,7 +532,7 @@ export const recordQualifiedRound = createServerFn({ method: "POST" })
       credited,
       streakCount,
       best120,
-      rescued: Boolean(last !== today && last !== yesterday && credited && streakCount > 1),
+      rescued: Boolean(last !== today && last !== yday && credited && streakCount > 1),
     };
   });
 

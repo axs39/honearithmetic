@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { getSocialStatus, setDisplayName } from "@/lib/game/leaderboard";
+import { clientTimeZone } from "@/lib/game/sync-social";
 import {
   isIntroDone,
   markDisplayNameGateShown,
@@ -28,7 +29,7 @@ export function DisplayNameGate() {
       return;
     }
     let cancelled = false;
-    void getSocialStatus()
+    void getSocialStatus({ data: { timeZone: clientTimeZone() } })
       .then((s) => {
         if (cancelled) return;
         if (s.needsDisplayName) {
