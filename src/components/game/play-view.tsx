@@ -290,34 +290,34 @@ export function PlayView() {
               {problem.b}
             </span>
             <span className="text-4xl text-subtle sm:text-6xl">=</span>
-            <span
-              className="min-w-[2ch] text-5xl text-accent tabular-nums sm:text-7xl"
-            >
-              {input || ""}
-              {phase === "playing" ? <span className="caret" /> : null}
+            <span className="relative inline-flex min-h-[1em] min-w-[2.5ch] items-baseline text-5xl text-accent tabular-nums sm:text-7xl">
+              <span aria-hidden="true" className="pointer-events-none">
+                {input || " "}
+                {phase === "playing" ? <span className="caret" /> : null}
+              </span>
+              <input
+                ref={inputRef}
+                value={input}
+                onChange={(e) => applyInput(e.target.value)}
+                onBlur={() => {
+                  if (useGameStore.getState().phase === "playing") {
+                    inputRef.current?.focus();
+                  }
+                }}
+                inputMode={usePad ? "none" : "numeric"}
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+                aria-label="Answer"
+                readOnly={usePad}
+                className="absolute inset-0 z-10 h-full w-full cursor-text opacity-0"
+              />
             </span>
           </div>
         ) : (
           <p className="text-muted">Preparing…</p>
         )}
         <span className="sr-only">{problem ? problemText(problem) : ""}</span>
-        <input
-          ref={inputRef}
-          value={input}
-          onChange={(e) => applyInput(e.target.value)}
-          onBlur={() => {
-            if (useGameStore.getState().phase === "playing") {
-              inputRef.current?.focus();
-            }
-          }}
-          inputMode={usePad ? "none" : "numeric"}
-          autoComplete="off"
-          autoCorrect="off"
-          spellCheck={false}
-          aria-label="Answer"
-          className="sr-only"
-          readOnly={usePad}
-        />
       </div>
 
       {usePad && phase === "playing" ? (
