@@ -29,6 +29,33 @@ export function isKvScopeReady(): boolean {
   return scopeReady;
 }
 
+/** SaveBootstrap must not push empty/stale saves before SessionBoot finishes loadProfile. */
+let cloudHydrated = false;
+const cloudListeners = new Set<() => void>();
+
+export function markCloudHydrated(): void {
+  if (cloudHydrated) return;
+  cloudHydrated = true;
+  for (const l of cloudListeners) l();
+}
+
+export function resetCloudHydrated(): void {
+  cloudHydrated = false;
+  for (const l of cloudListeners) l();
+}
+
+export function isCloudHydrated(): boolean {
+  return cloudHydrated;
+}
+
+export function subscribeCloudHydrated(onStoreChange: () => void): () => void {
+  cloudListeners.add(onStoreChange);
+  return () => {
+    cloudListeners.delete(onStoreChange);
+  };
+}
+
+
 function storeGet(store: Storage, key: string): string | null {
   try {
     return store.getItem(key);

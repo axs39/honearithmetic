@@ -246,13 +246,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
     });
     get().persist();
     // Flush cloud save immediately so a refresh doesn't reload a stale profile.
-    void import("@/lib/game/profile")
-      .then(({ saveProfile }) =>
-        saveProfile({
-          data: {
-            saveJson: get().exportJson(),
-            onboarded: true,
-          },
+    // Queued + re-read at flush so overlapping rounds keep every session.
+    void import("@/lib/game/cloud-save")
+      .then(({ enqueueCloudSave }) =>
+        enqueueCloudSave(async () => {
+          const { saveProfile } = await import("@/lib/game/profile");
+          return saveProfile({
+            data: {
+              saveJson: get().exportJson(),
+              onboarded: true,
+            },
+          });
         }),
       )
       .catch(() => {});

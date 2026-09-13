@@ -5,9 +5,12 @@ import {
   stripGuestQuery,
 } from "@/lib/game/identity";
 import {
+  isCloudHydrated,
   kvClearScope,
   kvReadScope,
+  markCloudHydrated,
   markKvScopeReady,
+  resetCloudHydrated,
   setKvScope,
   wipeLegacyUnscoped,
 } from "@/lib/game/persist";
@@ -40,6 +43,7 @@ function applyGuest() {
   wipeLegacyUnscoped();
   setKvScope("guest");
   markKvScopeReady();
+  markCloudHydrated();
   notifyIntro();
 }
 
@@ -75,19 +79,26 @@ export function SessionBoot({ children }: { children: ReactNode }) {
       return;
     }
 
-    if (lastId.current === userId) return;
-    lastId.current = userId;
-
-    const guest = adoptGuestIntoAccount();
-    setKvScope(`u:${userId}`);
-    markKvScopeReady();
-    if (guest.name) writeTraineeName(guest.name);
-    if (guest.intro) completeIntro(guest.name || readTraineeName());
-    else notifyIntro();
-    hydrate(true);
-    if (guest.save && guest.save.sessions.length > 0) {
-      hydrateRemote(guest.save);
+    const scopeChanged = lastId.current !== userId;
+    let guest = { name: "", intro: false, save: null as ReturnType<typeof adoptGuestIntoAccount>["save"] };
+    if (scopeChanged) {
+      lastId.current = userId;
+      resetCloudHydrated();
+      guest = adoptGuestIntoAccount();
+      setKvScope(`u:${userId}`);
+      markKvScopeReady();
+      if (guest.name) writeTraineeName(guest.name);
+      if (guest.intro) completeIntro(guest.name || readTraineeName());
+      else notifyIntro();
+      hydrate(true);
+      if (guest.save && guest.save.sessions.length > 0) {
+        hydrateRemote(guest.save);
+      }
+    } else if (isCloudHydrated()) {
+      // Same user, profile already loaded (skip re-fetch on displayName churn).
+      return;
     }
+    // else: Strict Mode remount after cancelled first fetch — load profile again.
 
     let cancelled = false;
     const t = window.setTimeout(() => {
@@ -95,18 +106,20 @@ export function SessionBoot({ children }: { children: ReactNode }) {
     }, 4000);
 
     const sessionsWhenFetchBegan = useGameStore.getState().sessions.length;
+    const guestName = guest.name;
+    const guestIntro = guest.intro;
     void import("@/lib/game/profile")
       .then(({ loadProfile }) => loadProfile())
       .then((row) => {
         if (cancelled) return;
         const name =
           row?.username ||
-          guest.name ||
+          guestName ||
           readTraineeName() ||
           user?.displayName ||
           "";
         if (name) writeTraineeName(name);
-        if (row?.onboarded || guest.intro) completeIntro(name);
+        if (row?.onboarded || guestIntro) completeIntro(name);
         if (row?.save && row.save.sessions.length > 0) {
           // Local may have grown while the profile request was in flight.
           hydrateRemote(row.save);
@@ -136,10 +149,12 @@ export function SessionBoot({ children }: { children: ReactNode }) {
       })
       .catch(() => {
         if (cancelled) return;
-        if (guest.intro || guest.name) completeIntro(guest.name);
+        if (guestIntro || guestName) completeIntro(guestName);
       })
       .finally(() => {
         window.clearTimeout(t);
+        // Allow SaveBootstrap cloud pushes only after first profile attempt.
+        if (!cancelled) markCloudHydrated();
       });
 
     return () => {

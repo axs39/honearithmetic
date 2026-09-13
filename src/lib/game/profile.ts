@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { getSql } from "@/lib/db";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { normalizeUsername } from "./account";
-import { parseImported, type SaveState } from "./storage";
+import { exportSave, mergeSaves, parseImported, type SaveState } from "./storage";
 
 export type ProfileRow = {
   username: string;
@@ -16,6 +16,21 @@ function displayUsername(raw: string | undefined): string {
   const t = (raw ?? "").trim().slice(0, 32);
   return t || PLACEHOLDER;
 }
+
+function parseSaveJson(raw: unknown): SaveState | null {
+  try {
+    if (raw == null || raw === "{}") return null;
+    if (typeof raw === "string") {
+      if (!raw.trim() || raw === "{}") return null;
+      return parseImported(raw);
+    }
+    if (typeof raw === "object") return parseImported(JSON.stringify(raw));
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 
 export const usernameAvailable = createServerFn({ method: "GET" })
   .validator((data: { username: string }) => data)
@@ -47,16 +62,7 @@ export const loadProfile = createServerFn({ method: "GET" })
     `;
     const row = rows[0];
     if (!row) return null;
-    let save: SaveState | null = null;
-    try {
-      const raw = row.save_json as unknown;
-      if (raw && raw !== "{}") {
-        if (typeof raw === "string") save = parseImported(raw);
-        else if (typeof raw === "object") save = parseImported(JSON.stringify(raw));
-      }
-    } catch {
-      save = null;
-    }
+    const save = parseSaveJson(row.save_json as unknown);
     return {
       username: row.username,
       onboarded: Boolean(row.onboarded),
@@ -79,8 +85,12 @@ export const saveProfile = createServerFn({ method: "POST" })
     const sql = await getSql();
     const wanted = displayUsername(data.username);
     const onboarded = data.onboarded ?? true;
-    const existing = await sql<{ username: string; display_name: string | null }>`
-      select username, display_name from profiles where user_id = ${context.userId}
+    const existing = await sql<{
+      username: string;
+      display_name: string | null;
+      save_json: string;
+    }>`
+      select username, display_name, save_json from profiles where user_id = ${context.userId}
     `;
     const taken =
       wanted.toLowerCase() !== PLACEHOLDER
@@ -112,6 +122,21 @@ export const saveProfile = createServerFn({ method: "POST" })
       if (!dnTaken[0]) displayName = pendingDisplay;
     }
 
+    // Union with existing cloud save so a stale/empty client push cannot
+    // drop sessions that landed earlier (Classic 30s refresh regression).
+    let saveJson = data.saveJson;
+    try {
+      const incoming = parseImported(data.saveJson);
+      const prior = parseSaveJson(existing[0]?.save_json as unknown);
+      if (prior && prior.sessions.length > 0) {
+        saveJson = exportSave(mergeSaves(incoming, prior));
+      } else {
+        saveJson = exportSave(incoming);
+      }
+    } catch {
+      saveJson = data.saveJson;
+    }
+
     if (displayName) {
       await sql`
         insert into profiles (user_id, username, onboarded, save_json, display_name, display_name_changed_at, updated_at)
@@ -119,7 +144,7 @@ export const saveProfile = createServerFn({ method: "POST" })
           ${context.userId},
           ${username},
           ${onboarded},
-          ${data.saveJson},
+          ${saveJson},
           ${displayName},
           now(),
           now()
@@ -146,7 +171,7 @@ export const saveProfile = createServerFn({ method: "POST" })
           ${context.userId},
           ${username},
           ${onboarded},
-          ${data.saveJson},
+          ${saveJson},
           now()
         )
         on conflict (user_id) do update set
