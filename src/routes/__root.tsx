@@ -14,6 +14,7 @@ import { DisplayNameGate } from "@/components/social/display-name-gate";
 import { AppearanceBoot } from "@/components/appearance/appearance-boot";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import appCss from "../styles.css?url";
+import { UNSUPPORTED_BROWSER_GATE_SCRIPT } from "@/lib/browser/unsupported-gate-script";
 
 const APP_NAME = "Hone";
 
@@ -84,11 +85,49 @@ function RootComponent() {
         <HeadContent />
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var r=localStorage.getItem("hone.appearance.v1");var a=r?JSON.parse(r):{};var t=a.theme==="light"?"light":"dark";var f=a.font==="simple"?"simple":"default";var e=document.documentElement;e.classList.toggle("dark",t==="dark");e.classList.toggle("light",t==="light");e.dataset.theme=t;e.dataset.font=f;var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute("content",t==="dark"?"#0a0b0d":"#f4f2ec");}catch(e){}})();`,
+            __html: UNSUPPORTED_BROWSER_GATE_SCRIPT,
+          }}
+        />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{if(window.__HONE_UNSUPPORTED__)return;var r=localStorage.getItem("hone.appearance.v1");var a=r?JSON.parse(r):{};var t=a.theme==="light"?"light":"dark";var f=a.font==="simple"?"simple":"default";var e=document.documentElement;e.classList.toggle("dark",t==="dark");e.classList.toggle("light",t==="light");e.dataset.theme=t;e.dataset.font=f;var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute("content",t==="dark"?"#0a0b0d":"#f4f2ec");}catch(e){}})();`,
           }}
         />
       </head>
       <body className="bg-bg text-fg font-sans">
+        <noscript>
+          <div
+            id="hone-unsupported"
+            style={{
+              boxSizing: "border-box",
+              minHeight: "100vh",
+              padding: "32px 20px",
+              background: "#0a0b0d",
+              color: "#f4f2ec",
+              fontFamily:
+                "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif",
+            }}
+          >
+            <div
+              style={{
+                maxWidth: 420,
+                margin: "12vh auto 0",
+                padding: "28px 24px",
+                border: "1px solid #2a2d33",
+                borderRadius: 16,
+                background: "#121418",
+              }}
+            >
+              <h1 style={{ fontSize: 28, margin: "0 0 12px" }}>
+                Please enable JavaScript
+              </h1>
+              <p style={{ fontSize: 16, lineHeight: 1.5, color: "#c8c4bc" }}>
+                Hone needs JavaScript (and a recent browser) to run. Turn JS on,
+                or update Safari / Chrome, then open honearithmetic.trade again.
+              </p>
+            </div>
+          </div>
+        </noscript>
         <AppearanceBoot />
         <PreviewHostBridge />
         <AuthProvider>
