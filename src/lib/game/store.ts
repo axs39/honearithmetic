@@ -178,7 +178,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       prevEma: s.facts[problem.key]?.emaMs ?? null,
     };
     const facts: FactMap = applyAttempt(s.facts, event, Date.now());
-    const recentKeys = [...s.recentKeys, problem.key].slice(-8);
+    // Keep the whole session so we can avoid repeats across a default round.
+    const recentKeys = [...s.recentKeys, problem.key].slice(-200);
     const next = nextProblem(s.settings, facts, recentKeys, problem.key);
     set({
       facts,

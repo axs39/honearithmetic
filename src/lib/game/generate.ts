@@ -41,26 +41,31 @@ function placePair(
   return null;
 }
 
-/** Prefer ops that haven't appeared in the last few questions (no topic blocks). */
+/** Interleave ops: no immediate repeat when possible; prefer underused ops. */
 function pickOpDiverse(ops: Op[], recentOps: Op[]): Op {
   if (ops.length === 1) return ops[0]!;
+  const last = recentOps[recentOps.length - 1];
+  const counts = new Map<Op, number>();
+  for (const op of ops) counts.set(op, 0);
+  for (const op of recentOps) {
+    if (counts.has(op)) counts.set(op, (counts.get(op) ?? 0) + 1);
+  }
+  const minCount = Math.min(...ops.map((op) => counts.get(op) ?? 0));
   const weights = ops.map((op) => {
-    let streak = 0;
-    for (let i = recentOps.length - 1; i >= 0; i -= 1) {
-      if (recentOps[i] === op) streak += 1;
-      else break;
-    }
-    const last = recentOps[recentOps.length - 1];
-    const prev = recentOps[recentOps.length - 2];
-    // Hard-avoid continuing a same-op streak; soft-penalize the prior op.
-    if (streak >= 2) return 0.02;
-    if (op === last) return 0.08;
-    if (op === prev) return 0.45;
-    // Boost ops missing from the recent window.
-    const recentHits = recentOps.filter((o) => o === op).length;
-    return 1.2 + Math.max(0, 3 - recentHits) * 0.35;
+    // Hard ban: never continue the same op when alternatives exist.
+    if (op === last) return 0;
+    const count = counts.get(op) ?? 0;
+    // Strongly favor ops that are behind in this session.
+    const deficit = count - minCount;
+    if (deficit === 0) return 3.5;
+    if (deficit === 1) return 1.0;
+    return 0.25 / deficit;
   });
   const total = weights.reduce((s, w) => s + w, 0);
+  if (total <= 0) {
+    const others = ops.filter((op) => op !== last);
+    return others.length ? pick(others) : ops[0]!;
+  }
   let r = Math.random() * total;
   for (let i = 0; i < ops.length; i += 1) {
     r -= weights[i]!;
@@ -227,6 +232,10 @@ export function nextProblem(
 ): Problem {
   const ops = enabledOps(settings);
   const recentOps = recentOpsFromKeys(recentKeys);
+  const seen = new Set(recentKeys);
+  if (lastKey) seen.add(lastKey);
+  // Soft adaptive window stays short; session-seen list can be long.
+  const softRecent = recentKeys.slice(-8);
   const fallback: Problem = {
     op: "add",
     a: 2,
@@ -236,8 +245,16 @@ export function nextProblem(
   };
   if (ops.length === 0) return fallback;
 
+  const isFresh = (p: Problem | null | undefined): p is Problem =>
+    Boolean(p && !seen.has(p.key));
+
   const mode = settings.mode;
   const makeRandom = () => {
+    for (let i = 0; i < 48; i++) {
+      const p = randomProblem(settings, undefined, recentOps);
+      if (isFresh(p)) return p;
+    }
+    // Exhausted unique facts for this range — avoid immediate repeat only.
     for (let i = 0; i < 12; i++) {
       const p = randomProblem(settings, undefined, recentOps);
       if (p && p.key !== lastKey) return p;
@@ -249,23 +266,30 @@ export function nextProblem(
     // Guarantee each enabled op shows up in the pool so weighting can't
     // collapse into a same-op segment.
     for (const op of ops) {
-      const p = randomProblem(settings, op, recentOps);
-      if (p && p.key !== lastKey) into.push(p);
+      for (let i = 0; i < 8; i++) {
+        const p = randomProblem(settings, op, recentOps);
+        if (isFresh(p)) {
+          into.push(p);
+          break;
+        }
+      }
     }
   };
 
   const withDiversity = (p: Problem, base: number): number => {
-    let streak = 0;
-    for (let i = recentOps.length - 1; i >= 0; i -= 1) {
-      if (recentOps[i] === p.op) streak += 1;
-      else break;
-    }
     const last = recentOps[recentOps.length - 1];
     let mult = 1;
-    if (p.op === last) mult *= streak >= 1 ? 0.06 : 0.2;
-    else mult *= 1.25;
-    if (streak >= 2 && p.op === last) mult *= 0.15;
-    return Math.max(0.01, base * mult);
+    // Hard-zero same-op streak when alternatives exist in the candidate pool later;
+    // here heavily penalize so weighted pick almost never continues an op.
+    if (p.op === last) mult *= 0.02;
+    else mult *= 1.4;
+    if (seen.has(p.key)) mult *= 0.01;
+    const counts = recentOps.filter((o) => o === p.op).length;
+    const minCount = Math.min(
+      ...ops.map((op) => recentOps.filter((o) => o === op).length),
+    );
+    if (counts > minCount) mult *= 0.35;
+    return Math.max(0.001, base * mult);
   };
 
   if (mode === "classic") return makeRandom();
@@ -278,38 +302,38 @@ export function nextProblem(
     seedPerOp(candidates);
     for (const f of usableWeak) {
       const p = problemFromFact(f, settings);
-      if (p && p.key !== lastKey) candidates.push(p);
+      if (isFresh(p)) candidates.push(p);
       const n = neighborProblem(f, settings);
-      if (n && n.key !== lastKey) candidates.push(n);
+      if (isFresh(n)) candidates.push(n);
     }
     for (let i = 0; i < 6; i++) {
       const p = makeRandom();
-      if (p.key !== lastKey) candidates.push(p);
+      if (isFresh(p)) candidates.push(p);
     }
     if (candidates.length === 0) return makeRandom();
     const weights = candidates.map((p) =>
-      withDiversity(p, weightForProblem(p, facts, recentKeys, "focus")),
+      withDiversity(p, weightForProblem(p, facts, softRecent, "focus")),
     );
     return weightedPick(candidates, weights);
   }
 
   const candidates: Problem[] = [];
   seedPerOp(candidates);
-  for (let i = 0; i < 16; i++) {
+  for (let i = 0; i < 24; i++) {
     const p = randomProblem(settings, undefined, recentOps);
-    if (p && p.key !== lastKey) candidates.push(p);
+    if (isFresh(p)) candidates.push(p);
   }
   for (const f of usableWeak) {
     const p = problemFromFact(f, settings);
-    if (p && p.key !== lastKey) candidates.push(p);
+    if (isFresh(p)) candidates.push(p);
   }
   if (usableWeak[0]) {
     const n = neighborProblem(usableWeak[0], settings);
-    if (n && n.key !== lastKey) candidates.push(n);
+    if (isFresh(n)) candidates.push(n);
   }
   if (candidates.length === 0) return makeRandom();
   const weights = candidates.map((p) =>
-    withDiversity(p, weightForProblem(p, facts, recentKeys, "adaptive")),
+    withDiversity(p, weightForProblem(p, facts, softRecent, "adaptive")),
   );
   return weightedPick(candidates, weights);
 }
