@@ -1,60 +1,68 @@
 import type { Session } from "./types";
 import { isBoardEligibleSession } from "./types";
 
-/** 120-second default clock — the desk benchmark. */
+/** 120-second default clock — the benchmark round for ranks. */
 export const BENCH_SECONDS = 120;
 
-/** Community / interview-prep bands for a 120s default mix. */
-export const QUANT_BANDS = [
+/** Ranks for a 120s default mix, lowest to highest. */
+export const RANKS = [
   {
     min: 0,
     max: 20,
-    label: "Foundation",
-    detail: "Number facts are not yet automatic.",
+    label: "Bronze",
+    detail: "Number facts are still settling in.",
   },
   {
     min: 20,
     max: 30,
-    label: "Building",
-    detail: "Typical of someone just starting interview prep.",
+    label: "Silver",
+    detail: "Getting quicker on the basics.",
   },
   {
     min: 30,
     max: 40,
-    label: "Interview range",
-    detail: "Approaching what most desks screen for.",
+    label: "Gold",
+    detail: "Solid, steady pace.",
   },
   {
     min: 40,
     max: 50,
-    label: "Desk-ready",
-    detail: "Around a passing candidate and a working trader.",
+    label: "Platinum",
+    detail: "Fast and reliable across all four operations.",
   },
   {
     min: 50,
     max: 60,
-    label: "Strong",
-    detail: "Comfortable on almost every arithmetic screen.",
+    label: "Diamond",
+    detail: "Very fast — few slip-ups.",
   },
   {
     min: 60,
     max: 200,
-    label: "Elite",
-    detail: "Optiver-level pace. Rare on a trading floor.",
+    label: "Master",
+    detail: "Top rank. Rare pace.",
   },
 ] as const;
 
-/** Fair average for a working quant trader on the 120s default mix. */
-export const AVG_TRADER_SCORE = 44;
-export const AVG_CANDIDATE_SCORE = 32;
-export const ELITE_SCORE = 60;
+export type Rank = (typeof RANKS)[number];
+
+/** Right edge of the Compare bar. */
 export const SCALE_MAX = 80;
 
-export function bandFor(score: number) {
+export function rankFor(score: number): Rank {
   return (
-    QUANT_BANDS.find((b) => score >= b.min && score < b.max) ??
-    QUANT_BANDS[QUANT_BANDS.length - 1]!
+    RANKS.find((r) => score >= r.min && score < r.max) ??
+    RANKS[RANKS.length - 1]!
   );
+}
+
+/** The next rank up and the points still needed to reach it; null at the top rank. */
+export function nextRank(
+  score: number,
+): { rank: Rank; needed: number } | null {
+  const next = RANKS.find((r) => r.min > score);
+  if (!next) return null;
+  return { rank: next, needed: Math.max(1, Math.ceil(next.min - score)) };
 }
 
 /** Convert any completed session to a 120s-equivalent score via pace. */
@@ -78,8 +86,8 @@ export function bestEquivalent120(
 }
 
 /**
- * Top score for Compare / desk yardstick: official board rounds first
- * (Classic 120s, all ops, desk ranges), else any completed 120s best.
+ * Top score for Compare / ranks: official board rounds first
+ * (Classic 120s, all ops, default ranges), else any completed 120s best.
  */
 export function bestCompare120(
   sessions: Session[],
@@ -103,8 +111,4 @@ export function bestCompare120(
   const best = Math.max(any120, map);
   if (best > 0) return { score: best, source: "120s" };
   return { score: 0, source: null };
-}
-
-export function traderDelta(score: number): number {
-  return Math.round(score - AVG_TRADER_SCORE);
 }

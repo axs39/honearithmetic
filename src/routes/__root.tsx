@@ -54,7 +54,7 @@ export const Route = createRootRouteWithContext<RootContext>()({
       {
         name: "description",
         content:
-          "Hone is a quant arithmetic trainer — timed drills, custom number ranges, and a memory of the facts that lag.",
+          "Hone is a mental arithmetic trainer — timed drills, custom number ranges, and a memory of the facts that lag.",
       },
       { name: "theme-color", content: "#0a0b0d" },
     ],

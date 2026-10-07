@@ -1,4 +1,4 @@
-# Hone — Quant Arithmetic
+# Hone — Mental Arithmetic
 
 Mental arithmetic trainer.
 

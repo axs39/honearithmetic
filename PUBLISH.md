@@ -1,6 +1,6 @@
 # Publish Hone yourself
 
-This is the source for Hone, a quant arithmetic trainer. Copying the repo to GitHub does **not** copy your scores. Scores live in a browser until you sign in; signed-in scores live in the database of whichever host is running the app.
+This is the source for Hone, a mental arithmetic trainer. Copying the repo to GitHub does **not** copy your scores. Scores live in a browser until you sign in; signed-in scores live in the database of whichever host is running the app.
 
 ## Run it locally
 

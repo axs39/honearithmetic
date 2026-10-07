@@ -1,16 +1,13 @@
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 import {
-  AVG_CANDIDATE_SCORE,
-  AVG_TRADER_SCORE,
   BENCH_SECONDS,
-  ELITE_SCORE,
-  QUANT_BANDS,
+  RANKS,
   SCALE_MAX,
-  bandFor,
   bestCompare120,
-  traderDelta,
-} from "@/lib/game/quant";
+  nextRank,
+  rankFor,
+} from "@/lib/game/ranks";
 import { formatDurationLabel, formatPpm } from "@/lib/game/format";
 import { useGameStore } from "@/lib/game/store";
 import { cn } from "@/lib/utils";
@@ -67,15 +64,13 @@ export function CompareView() {
 
   const { score, source } = bestCompare120(sessions, bestByDuration);
   const shown = useCountUp(score, hydrated && source != null && score > 0);
-  const band = bandFor(score);
-  const delta = traderDelta(score);
+  const rank = rankFor(score);
+  const next = nextRank(score);
   const youPct = Math.max(
     2,
     Math.min(98, ((shown || 0) / SCALE_MAX) * 100),
   );
-  const traderPct = (AVG_TRADER_SCORE / SCALE_MAX) * 100;
-  const elitePct = (ELITE_SCORE / SCALE_MAX) * 100;
-  const candidatePct = (AVG_CANDIDATE_SCORE / SCALE_MAX) * 100;
+  const rankMarks = RANKS.filter((r) => r.min > 0);
 
   return (
     <AppShell>
@@ -84,19 +79,18 @@ export function CompareView() {
           Compare
         </h1>
         <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted">
-          The 120-second default mix is the desk yardstick. A working quant
-          trader typically lands around {AVG_TRADER_SCORE} on that clock. Sixty
-          is rare.
+          Your best 120-second classic round sets your rank, from Bronze to
+          Master.
         </p>
 
         <section className="mt-8 rounded-xl bg-surface p-4 shadow-[var(--shadow-border)] sm:p-6">
           <p className="text-xs font-medium tracking-wide text-muted uppercase">
-            You vs the desk
+            Your rank
           </p>
           {!hydrated || source === null ? (
             <p className="mt-4 text-sm leading-relaxed text-muted">
               Play a completed {formatDurationLabel(BENCH_SECONDS)} classic
-              round to place yourself. That’s the industry mix: all four
+              round to place yourself. That’s the classic mix: all four
               operations, addition 2–100, multiplication 2–12 × 2–100.
             </p>
           ) : (
@@ -111,22 +105,23 @@ export function CompareView() {
                   </p>
                 </div>
                 <p className="max-w-[14rem] text-right text-sm text-muted">
-                  {delta === 0
-                    ? "Level with the average trader."
-                    : delta > 0
-                      ? `${delta} above a typical desk.`
-                      : `${Math.abs(delta)} below a typical desk.`}
+                  {next ? `${next.needed} to ${next.rank.label}` : "Top rank"}
                 </p>
               </div>
 
               <div className="relative mt-8 mb-10 h-2 rounded-full bg-surface-2">
                 <span
                   className="absolute top-0 h-2 rounded-full bg-accent/40"
-                  style={{ width: `${traderPct}%` }}
+                  style={{ width: `${youPct}%` }}
                 />
-                <Marker left={candidatePct} label="Prep" />
-                <Marker left={traderPct} label="Trader" strong />
-                <Marker left={elitePct} label="Elite" />
+                {rankMarks.map((r, i) => (
+                  <Marker
+                    key={r.label}
+                    left={(r.min / SCALE_MAX) * 100}
+                    label={r.label}
+                    above={i % 2 === 1}
+                  />
+                ))}
                 <span
                   className="absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-fg shadow-[var(--shadow-border-hover)]"
                   style={{ left: `${youPct}%` }}
@@ -139,8 +134,8 @@ export function CompareView() {
               </div>
 
               <p className="mt-4 text-sm text-fg">
-                <span className="font-medium">{band.label}.</span>{" "}
-                <span className="text-muted">{band.detail}</span>
+                <span className="font-medium">{rank.label}.</span>{" "}
+                <span className="text-muted">{rank.detail}</span>
               </p>
             </>
           )}
@@ -148,10 +143,10 @@ export function CompareView() {
 
         <section className="mt-4 rounded-xl bg-surface p-4 shadow-[var(--shadow-border)] sm:p-6">
           <h2 className="text-xs font-medium tracking-wide text-muted uppercase">
-            120s score bands
+            Ranks
           </h2>
           <ul className="mt-3 divide-y divide-border">
-            {QUANT_BANDS.map((b) => {
+            {RANKS.map((b) => {
               const active =
                 source != null && score >= b.min && score < b.max;
               return (
@@ -185,24 +180,17 @@ export function CompareView() {
 
         <section className="mt-4 mb-8 rounded-xl bg-surface p-4 shadow-[var(--shadow-border)] sm:p-6">
           <h2 className="text-xs font-medium tracking-wide text-muted uppercase">
-            Marks on the floor
+            Rank pace
           </h2>
           <ul className="mt-3 space-y-3 text-sm">
-            <Mark
-              label="Interview prep"
-              value={String(AVG_CANDIDATE_SCORE)}
-              hint={`~${formatPpm(AVG_CANDIDATE_SCORE / 2)} per minute`}
-            />
-            <Mark
-              label="Average trader"
-              value={String(AVG_TRADER_SCORE)}
-              hint={`~${formatPpm(AVG_TRADER_SCORE / 2)} per minute`}
-            />
-            <Mark
-              label="Elite / Optiver pace"
-              value={`${ELITE_SCORE}+`}
-              hint={`~${formatPpm(ELITE_SCORE / 2)} per minute`}
-            />
+            {rankMarks.map((r) => (
+              <Mark
+                key={r.label}
+                label={r.label}
+                value={`${r.min}+`}
+                hint={`~${formatPpm(r.min / 2)} per minute`}
+              />
+            ))}
           </ul>
         </section>
       </div>
@@ -214,10 +202,12 @@ function Marker({
   left,
   label,
   strong = false,
+  above = false,
 }: {
   left: number;
   label: string;
   strong?: boolean;
+  above?: boolean;
 }) {
   return (
     <span
@@ -227,7 +217,12 @@ function Marker({
       <span
         className={cn("block h-3 w-px", strong ? "bg-fg" : "bg-muted")}
       />
-      <span className="absolute top-4 left-1/2 -translate-x-1/2 whitespace-nowrap text-xs tracking-wide text-subtle uppercase">
+      <span
+        className={cn(
+          "absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] tracking-wide text-subtle uppercase",
+          above ? "bottom-4" : "top-4",
+        )}
+      >
         {label}
       </span>
     </span>

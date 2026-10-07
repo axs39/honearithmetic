@@ -64,8 +64,8 @@ const FEATURES = [
     body: "A map of every multiplication fact, a log of rounds, and the problems that still cost you time.",
   },
   {
-    title: "Compare to the desk",
-    body: "The 120-second default mix is the interview yardstick. Place your pace next to a working quant trader.",
+    title: "See your rank",
+    body: "Your best 120-second default round places you in a rank, from Bronze to Master.",
   },
   {
     title: "Sign in to lock it in",
@@ -315,7 +315,7 @@ function HelloBody({
   return (
     <div className="hello-enter flex flex-1 flex-col justify-center">
       <p className="text-xs font-medium tracking-[0.18em] text-muted uppercase">
-        Quant arithmetic
+        Mental arithmetic
       </p>
       <h1 className="hello-title mt-5 font-display text-5xl leading-none font-medium tracking-tight sm:text-6xl">
         Hello
@@ -418,7 +418,7 @@ function FeaturesBody({ greet }: { greet: string }) {
       ) : null}
       <h1 className="mt-2 font-display text-3xl tracking-tight">What’s inside</h1>
       <p className="mt-2 mb-6 text-sm leading-relaxed text-muted">
-        Built for quant interview arithmetic — speed, ranges, and a memory of
+        Built for fast mental arithmetic — speed, ranges, and a memory of
         the facts that lag.
       </p>
       <ul className="space-y-4 pb-4">

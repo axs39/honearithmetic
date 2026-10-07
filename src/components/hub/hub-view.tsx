@@ -81,7 +81,7 @@ export function HubView() {
     <div className="mx-auto grid max-w-5xl gap-10 pt-4 lg:grid-cols-[1.15fr_0.85fr] lg:gap-16 lg:pt-10">
       <section className="stagger-in">
         <p className="text-xs font-medium tracking-[0.18em] text-muted uppercase">
-          Quant arithmetic
+          Mental arithmetic
         </p>
         <h1 className="mt-3 font-display text-4xl leading-[1.05] font-medium tracking-tight text-fg sm:text-5xl">
           {name ? (

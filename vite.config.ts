@@ -154,7 +154,7 @@ function stubGrokOgIdentity(): Plugin {
     },
     load(source) {
       if (source === "\0" + id) {
-        return "export const grokOgIdentity = { title: \"Hone\", description: \"Quant arithmetic trainer\" };";
+        return "export const grokOgIdentity = { title: \"Hone\", description: \"Mental arithmetic trainer\" };";
       }
     },
   };
